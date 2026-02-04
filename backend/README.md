@@ -8,9 +8,43 @@ FastAPI backend for the Minnesota Conciliation Court Case Agent.
 - **`/health`** – Health check for load balancers
 - **`/docs`** – Swagger UI (when running)
 
+## Authentication
+
+JWT-based authentication is provided by FastAPI-Users. Use the `Authorization: Bearer <token>` header for protected routes.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Create new user account |
+| POST | `/api/auth/login` | Login and receive JWT token |
+| POST | `/api/auth/logout` | Logout (invalidate token client-side) |
+| GET | `/api/auth/me` | Get current user profile |
+| PATCH | `/api/auth/me` | Update user profile |
+
+**Example: Register**
+
+```bash
+curl -X POST http://localhost:8000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"password123"}'
+```
+
+**Example: Login**
+
+```bash
+curl -X POST "http://localhost:8000/api/auth/login" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=user@example.com&password=password123"
+```
+
+**Example: Get current user (with token)**
+
+```bash
+curl -X GET http://localhost:8000/api/auth/me \
+  -H "Authorization: Bearer <your_jwt_token>"
+```
+
 Planned routes (Phase 2+):
 
-- `/api/auth` – Authentication (signup, login)
 - `/api/cases` – Case management
 - `/api/agents` – Agent orchestration
 - `/api/memory` – Memory block operations

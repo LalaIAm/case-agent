@@ -1,18 +1,29 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { AuthPage } from './pages/AuthPage';
+import { Dashboard } from './pages/Dashboard';
+
 function App() {
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <header className="border-b border-gray-200 bg-white px-6 py-4 shadow-sm">
-        <h1 className="text-xl font-semibold text-blue-900">
-          Minnesota Conciliation Court Case Agent
-        </h1>
-      </header>
-      <main className="p-6">
-        {/* Future: Router setup (Phase 11) */}
-        {/* Future: Authentication wrapper */}
-        <p className="text-gray-600">Legal assistant application — setup complete.</p>
-      </main>
-    </div>
-  )
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<AuthPage />} />
+          <Route path="/register" element={<AuthPage />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  );
 }
 
-export default App
+export default App;

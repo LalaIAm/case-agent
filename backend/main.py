@@ -17,6 +17,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Authentication is now active - use current_active_user dependency for protected routes
 
 
 @app.on_event("startup")
@@ -43,12 +44,13 @@ def root():
     }
 
 
+from backend.auth.router import router as auth_router
+
+app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 # Future route imports (Phase 2+):
-# from auth import router as auth_router
 # from . import cases  # case routes
 # from agents import router as agents_router
 # from memory import router as memory_router
-# app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 # app.include_router(cases_router, prefix="/api/cases", tags=["cases"])
 # app.include_router(agents_router, prefix="/api/agents", tags=["agents"])
 # app.include_router(memory_router, prefix="/api/memory", tags=["memory"])

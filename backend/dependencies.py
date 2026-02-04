@@ -8,6 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.config import get_settings
 from backend.database import AsyncSessionLocal
 
+# Use current_active_user from backend.auth.users for protected routes
+# Example: from backend.auth.users import current_active_user; then Depends(current_active_user)
+
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """Provide an async database session with automatic commit/rollback."""
@@ -20,11 +23,3 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             await session.close()
-
-
-def get_current_user():
-    """
-    Placeholder: Current authenticated user dependency.
-    To be implemented in Phase 3 with FastAPI-Users.
-    """
-    raise NotImplementedError("Current user dependency will be implemented in Phase 3")

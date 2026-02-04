@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = Field(..., description="OpenAI API key for agents and embeddings")
     TAVILY_API_KEY: str = Field(..., description="Tavily Search API key for research agent")
     SECRET_KEY: str = Field(..., min_length=32, description="Secret key for JWT signing")
+    RESET_PASSWORD_TOKEN_SECRET: Optional[str] = Field(
+        default=None,
+        description="Secret for password-reset tokens; defaults to SECRET_KEY if unset",
+    )
+    VERIFICATION_TOKEN_SECRET: Optional[str] = Field(
+        default=None,
+        description="Secret for email verification tokens; defaults to SECRET_KEY if unset",
+    )
     FRONTEND_URL: str = Field(default="http://localhost:5173", description="Frontend origin(s) for CORS")
     ENVIRONMENT: str = Field(default="development", description="Environment: development, staging, production")
 
