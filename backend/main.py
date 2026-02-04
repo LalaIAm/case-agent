@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import get_settings
+from backend.database.utils import check_db_connection
 
 app = FastAPI(title="Minnesota Conciliation Court Case Agent")
 
@@ -18,10 +19,17 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+async def startup_event():
+    """Verify database connection on application startup."""
+    await check_db_connection()
+
+
 @app.get("/health")
-def health_check():
+async def health_check():
     """Health check endpoint for load balancers and monitoring."""
-    return {"status": "healthy"}
+    db_ok = await check_db_connection()
+    return {"status": "healthy" if db_ok else "degraded", "database": "connected" if db_ok else "disconnected"}
 
 
 @app.get("/")

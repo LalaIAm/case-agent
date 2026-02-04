@@ -25,14 +25,13 @@ async def check_db_connection() -> bool:
 
 async def enable_pgvector() -> None:
     """Ensure pgvector extension is enabled in the database."""
-    async with engine.connect() as conn:
+    async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        await conn.commit()
 
 
 async def create_vector_indexes() -> None:
     """Create vector similarity indexes if they do not exist."""
-    async with engine.connect() as conn:
+    async with engine.begin() as conn:
         await conn.execute(
             text(
                 """
@@ -51,4 +50,3 @@ async def create_vector_indexes() -> None:
                 """
             )
         )
-        await conn.commit()
