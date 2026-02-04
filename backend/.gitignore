@@ -1,0 +1,20 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*$py.class
+
+# Environment
+.env
+.env.local
+
+# Virtual environment
+venv/
+.venv/
+
+# Alembic
+alembic.ini
+
+# Local database
+*.db
+*.sqlite
