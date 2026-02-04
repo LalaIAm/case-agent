@@ -45,12 +45,7 @@ def root():
 
 
 from backend.auth.router import router as auth_router
+from backend.memory.router import router as memory_router
 
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
-# Future route imports (Phase 2+):
-# from . import cases  # case routes
-# from agents import router as agents_router
-# from memory import router as memory_router
-# app.include_router(cases_router, prefix="/api/cases", tags=["cases"])
-# app.include_router(agents_router, prefix="/api/agents", tags=["agents"])
-# app.include_router(memory_router, prefix="/api/memory", tags=["memory"])
+app.include_router(memory_router, prefix="/api/memory", tags=["memory"])

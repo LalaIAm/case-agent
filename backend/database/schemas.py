@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 # --- User Schemas ---
@@ -79,14 +79,41 @@ class CaseSessionUpdate(BaseModel):
 
 
 # --- MemoryBlock Schemas ---
+def _validate_content_non_empty(v: str) -> str:
+    """Reject empty or whitespace-only content; return stripped string."""
+    if not isinstance(v, str):
+        raise ValueError("content must be a string")
+    s = v.strip()
+    if not s:
+        raise ValueError("content must be non-empty after trimming whitespace")
+    return s
+
+
 class MemoryBlockBase(BaseModel):
     block_type: Literal["fact", "evidence", "strategy", "rule", "question"]
     content: str
     metadata_: Optional[Dict[str, Any]] = None
 
+    @field_validator("content")
+    @classmethod
+    def content_non_empty_stripped(cls, v: str) -> str:
+        return _validate_content_non_empty(v)
+
 
 class MemoryBlockCreate(MemoryBlockBase):
     session_id: UUID
+
+
+class MemoryBlockUpdate(BaseModel):
+    """Update body for memory block; content must be non-empty after trim."""
+
+    content: str
+    metadata_: Optional[Dict[str, Any]] = Field(None, alias="metadata")
+
+    @field_validator("content")
+    @classmethod
+    def content_non_empty_stripped(cls, v: str) -> str:
+        return _validate_content_non_empty(v)
 
 
 class MemoryBlockRead(MemoryBlockBase):
