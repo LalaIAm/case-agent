@@ -2,6 +2,10 @@
 
 React + TypeScript + Vite frontend for the Minnesota Conciliation Court Case Agent.
 
+## Prerequisites
+
+- Node 20.19+ (or 22.12+)
+
 ## Component structure
 
 - **`src/components/`** – Reusable UI components (e.g. `AgentStatus`, `AdvisorTab`)
