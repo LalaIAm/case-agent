@@ -27,6 +27,7 @@ router = APIRouter(prefix="/cases", tags=["advisor"])
 class AdvisorMessageBody(BaseModel):
     message: str
     include_context: bool = True
+    session_id: Optional[UUID] = None
 
 
 class ReanalyzeBody(BaseModel):
@@ -38,6 +39,7 @@ async def _sse_stream(
     user_id: UUID,
     message: str,
     include_context: bool,
+    session_id: Optional[UUID] = None,
 ):
     """Generator yielding SSE events for streaming response.
     Persistence (commit) is done inside ConversationalAdvisor.generate_response_stream
@@ -49,7 +51,9 @@ async def _sse_stream(
         advisor = ConversationalAdvisor(db, case_id, user_id)
         try:
             async for chunk in advisor.generate_response_stream(
-                user_message=message, include_context=include_context
+                user_message=message,
+                include_context=include_context,
+                session_id=session_id,
             ):
                 yield {"data": chunk}
         except Exception as e:
@@ -69,7 +73,13 @@ async def post_advisor_message(
     if not await validate_case_ownership(db, case_id, user.id):
         raise HTTPException(status_code=403, detail="Not authorized to access this case")
     return EventSourceResponse(
-        _sse_stream(case_id, user.id, body.message, body.include_context)
+        _sse_stream(
+            case_id,
+            user.id,
+            body.message,
+            body.include_context,
+            session_id=body.session_id,
+        )
     )
 
 

@@ -137,6 +137,21 @@ async def search_memory(
     }
 
 
+@router.get("/sessions/{session_id}/context", response_model=List[MemoryBlockRead])
+async def get_session_context(
+    session_id: UUID,
+    block_types: Optional[List[str]] = Query(None, description="Filter by block types"),
+    db: AsyncSession = Depends(get_db_session),
+    user: User = Depends(current_active_user),
+) -> Any:
+    """Retrieve all memory blocks for a session (session-specific context). User must own the session."""
+    if not await validate_session_ownership(db, session_id, user.id):
+        raise HTTPException(status_code=403, detail="Not authorized to access this session")
+    manager = MemoryManager(db)
+    blocks = await manager.get_session_blocks(session_id, block_types=block_types)
+    return [MemoryBlockRead.model_validate(b) for b in blocks]
+
+
 @router.get("/cases/{case_id}/context", response_model=List[MemoryBlockRead])
 async def get_case_context(
     case_id: UUID,

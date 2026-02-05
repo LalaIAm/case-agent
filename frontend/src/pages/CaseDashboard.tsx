@@ -8,8 +8,8 @@ import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EmptyState } from '../components/EmptyState';
-import { getCases } from '../services/cases';
-import type { Case } from '../types/case';
+import { getCases, getCaseDetails } from '../services/cases';
+import type { Case, CaseWithDetails } from '../types/case';
 
 type StatusFilter = 'all' | 'draft' | 'active' | 'completed';
 
@@ -34,6 +34,7 @@ function formatDate(iso: string): string {
 export function CaseDashboard() {
   const navigate = useNavigate();
   const [cases, setCases] = useState<Case[]>([]);
+  const [detailsMap, setDetailsMap] = useState<Record<string, CaseWithDetails>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('all');
@@ -49,11 +50,24 @@ export function CaseDashboard() {
             : { status: filter };
         const list = await getCases(params);
         setCases(list);
+        const details: Record<string, CaseWithDetails> = {};
+        await Promise.all(
+          list.map(async (c) => {
+            try {
+              const d = await getCaseDetails(c.id);
+              details[c.id] = d;
+            } catch {
+              // skip per-case errors
+            }
+          })
+        );
+        setDetailsMap(details);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Unable to load cases'
         );
         setCases([]);
+        setDetailsMap({});
       } finally {
         setLoading(false);
       }
@@ -149,6 +163,18 @@ export function CaseDashboard() {
                   <span className="text-xs text-gray-400">
                     {formatDate(c.created_at)}
                   </span>
+                  {detailsMap[c.id] && (
+                    <span className="text-xs text-gray-500">
+                      · {detailsMap[c.id].sessions.length} session
+                      {detailsMap[c.id].sessions.length !== 1 ? 's' : ''}
+                      {detailsMap[c.id].sessions.some((s) => s.status === 'active')
+                        ? ` · Session ${
+                            detailsMap[c.id].sessions.find((s) => s.status === 'active')
+                              ?.session_number ?? '?'
+                          } active`
+                        : ' · No active session'}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

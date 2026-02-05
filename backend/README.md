@@ -65,6 +65,40 @@ Agents live in `backend/agents/` and are orchestrated by the agent orchestrator 
 
 Tables will include: `users`, `cases`, `case_sessions`, `memory_blocks`, `documents`, `agent_runs`, `generated_documents`. See the main plan for schema details.
 
+## Session lifecycle and endpoints
+
+Sessions organize work per case. Lifecycle: **create** → **active** → **completed**.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/cases/{case_id}/sessions` | List all sessions for a case |
+| POST | `/api/cases/{case_id}/sessions` | Create a new session (auto-increment number, status=active) |
+| GET | `/api/cases/{case_id}/sessions/{session_id}` | Get a specific session (validates case ownership) |
+| PUT | `/api/cases/{case_id}/sessions/{session_id}` | Update session (e.g. status, completed_at) |
+| GET | `/api/cases/{case_id}/sessions/{session_id}/summary` | Session metadata + memory block counts by type |
+| GET | `/api/cases/{case_id}/active-session` | Get current active session (404 if none) |
+| GET | `/api/memory/sessions/{session_id}/context` | Memory blocks for a session (optional `block_types` filter) |
+
+**Session context scoping:** Use `GET /api/memory/sessions/{session_id}/context` to retrieve memory blocks for a single session. Use `GET /api/memory/cases/{case_id}/context` for case-wide (all sessions) context. The Case Advisor can be given an optional `session_id` when sending a message to scope advice to that session’s context.
+
+**Example: switch session and get summary**
+
+```bash
+# Get active session
+curl -s -H "Authorization: Bearer <token>" \
+  "http://localhost:8000/api/cases/<case_id>/active-session"
+
+# Get session summary (block counts)
+curl -s -H "Authorization: Bearer <token>" \
+  "http://localhost:8000/api/cases/<case_id>/sessions/<session_id>/summary"
+
+# Mark session completed
+curl -s -X PUT -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  "http://localhost:8000/api/cases/<case_id>/sessions/<session_id>" \
+  -d '{"status":"completed","completed_at":"2025-02-05T12:00:00Z"}'
+```
+
 ## Endpoint documentation
 
 Full endpoint docs will be added as routes are implemented. Use `/docs` for interactive API exploration.

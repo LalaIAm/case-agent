@@ -8,6 +8,7 @@ import type {
   CaseUpdate,
   CaseWithDetails,
   CaseSession,
+  CaseSessionSummary,
 } from '../types/case';
 
 const BASE = '/api/cases';
@@ -60,4 +61,55 @@ export async function createSession(
 ): Promise<CaseSession> {
   const { data } = await api.post<CaseSession>(`${BASE}/${caseId}/sessions`);
   return data;
+}
+
+export async function getSession(
+  caseId: string,
+  sessionId: string
+): Promise<CaseSession> {
+  const { data } = await api.get<CaseSession>(
+    `${BASE}/${caseId}/sessions/${sessionId}`
+  );
+  return data;
+}
+
+export async function updateSession(
+  caseId: string,
+  sessionId: string,
+  data: { status?: string; completed_at?: string | null }
+): Promise<CaseSession> {
+  const { data: updated } = await api.put<CaseSession>(
+    `${BASE}/${caseId}/sessions/${sessionId}`,
+    data
+  );
+  return updated;
+}
+
+export async function getSessionSummary(
+  caseId: string,
+  sessionId: string
+): Promise<CaseSessionSummary> {
+  const { data } = await api.get<CaseSessionSummary>(
+    `${BASE}/${caseId}/sessions/${sessionId}/summary`
+  );
+  return data;
+}
+
+export async function getActiveSession(
+  caseId: string
+): Promise<CaseSession | null> {
+  try {
+    const { data } = await api.get<CaseSession>(
+      `${BASE}/${caseId}/active-session`
+    );
+    return data;
+  } catch (err: unknown) {
+    const status =
+      err &&
+      typeof err === 'object' &&
+      'response' in err &&
+      (err as { response?: { status?: number } }).response?.status;
+    if (status === 404) return null;
+    throw err;
+  }
 }

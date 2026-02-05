@@ -14,6 +14,9 @@ import {
   updateCase,
   deleteCase,
   createSession,
+  getActiveSession,
+  getSessionSummary,
+  updateSession,
 } from '../services/cases';
 import {
   getGeneratedDocuments,
@@ -32,7 +35,15 @@ import { DocumentList } from '../components/DocumentList';
 import { DocumentViewer } from '../components/DocumentViewer';
 import { DocumentComparison } from '../components/DocumentComparison';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import type { CaseWithDetails, CaseSession } from '../types/case';
+import { SessionSelector } from '../components/SessionSelector';
+import { SessionHistory } from '../components/SessionHistory';
+import { SessionContextIndicator } from '../components/SessionContextIndicator';
+import {
+  getActiveSessionForCase,
+  setActiveSessionForCase,
+  clearActiveSessionForCase,
+} from '../utils/sessionStorage';
+import type { CaseWithDetails, CaseSession, CaseSessionSummary } from '../types/case';
 
 type TabId = 'overview' | 'documents' | 'agent-status' | 'advisor' | 'generated';
 
@@ -71,6 +82,8 @@ export function CaseDetail() {
   const navigate = useNavigate();
   const [caseDetails, setCaseDetails] = useState<CaseWithDetails | null>(null);
   const [sessions, setSessions] = useState<CaseSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sessionSummaries, setSessionSummaries] = useState<Map<string, CaseSessionSummary>>(new Map());
   const [initialAgentStatus, setInitialAgentStatus] = useState<{
     progress_percentage: number;
     workflow_status: string;
@@ -132,6 +145,66 @@ export function CaseDetail() {
       setLoading(false);
     }
   }, [caseId, navigate]);
+
+  const loadActiveSession = useCallback(async () => {
+    if (!caseId) return;
+    const stored = getActiveSessionForCase(caseId);
+    if (stored) {
+      const exists = sessions.some((s) => s.id === stored);
+      if (exists) {
+        setActiveSessionId(stored);
+        return;
+      }
+      clearActiveSessionForCase(caseId);
+    }
+    try {
+      const active = await getActiveSession(caseId);
+      setActiveSessionId(active?.id ?? null);
+      if (active) setActiveSessionForCase(caseId, active.id);
+    } catch {
+      setActiveSessionId(null);
+    }
+  }, [caseId, sessions]);
+
+  useEffect(() => {
+    if (sessions.length > 0) loadActiveSession();
+  }, [sessions.length, loadActiveSession]);
+
+  const handleSessionChange = useCallback(
+    async (sessionId: string) => {
+      setActiveSessionId(sessionId || null);
+      if (sessionId) {
+        setActiveSessionForCase(caseId!, sessionId);
+        try {
+          const summary = await getSessionSummary(caseId!, sessionId);
+          setSessionSummaries((prev) => new Map(prev).set(sessionId, summary));
+        } catch {
+          // ignore
+        }
+      } else {
+        clearActiveSessionForCase(caseId!);
+      }
+    },
+    [caseId]
+  );
+
+  const handleCompleteSession = useCallback(
+    async (sessionId: string) => {
+      if (!caseId) return;
+      try {
+        await updateSession(caseId, sessionId, {
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+        });
+        clearActiveSessionForCase(caseId);
+        await loadCase();
+        setActiveSessionId(null);
+      } catch {
+        setError('Failed to complete session');
+      }
+    },
+    [caseId, loadCase]
+  );
 
   const loadInitialAgentStatus = useCallback(async () => {
     if (!caseId) return;
@@ -234,6 +307,7 @@ export function CaseDetail() {
       return;
     try {
       await deleteCase(caseId);
+      clearActiveSessionForCase(caseId);
       navigate('/', { replace: true });
     } catch {
       setError('Failed to delete case');
@@ -245,6 +319,8 @@ export function CaseDetail() {
     try {
       const session = await createSession(caseId);
       setSessions((prev) => [...prev, session]);
+      setActiveSessionId(session.id);
+      setActiveSessionForCase(caseId, session.id);
       await loadCase();
       if (activeTab === 'generated') loadGeneratedDocs();
     } catch {
@@ -495,7 +571,14 @@ export function CaseDetail() {
               )}
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <SessionSelector
+              caseId={caseId}
+              sessions={sessions}
+              activeSessionId={activeSessionId}
+              onSessionChange={(id) => handleSessionChange(id)}
+              onSessionUpdated={loadCase}
+            />
             <Button variant="secondary" onClick={handleNewSession}>
               New Session
             </Button>
@@ -510,6 +593,28 @@ export function CaseDetail() {
             {error}
           </p>
         )}
+
+        <SessionContextIndicator
+          currentSession={
+            activeSessionId
+              ? sessions.find((s) => s.id === activeSessionId) ?? null
+              : null
+          }
+          totalSessions={sessions.length}
+          blockCount={
+            activeSessionId
+              ? sessionSummaries.get(activeSessionId)?.total_blocks
+              : undefined
+          }
+          onSwitchSession={() => {
+            /* focus SessionSelector or open modal; inline selector is always visible */
+          }}
+          onCompleteSession={
+            activeSessionId
+              ? () => handleCompleteSession(activeSessionId)
+              : undefined
+          }
+        />
 
         <div className="mb-6 border-b border-gray-200">
           <div className="flex gap-4">
@@ -573,19 +678,12 @@ export function CaseDetail() {
               )}
             </Card>
             <Card title="Sessions">
-              <ul className="space-y-2">
-                {sessions.map((s) => (
-                  <li
-                    key={s.id}
-                    className="flex items-center justify-between rounded border border-gray-200 px-4 py-2"
-                  >
-                    <span>
-                      Session {s.session_number} · {s.status} ·{' '}
-                      {formatDate(s.started_at)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <SessionHistory
+                caseId={caseId}
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                onSelectSession={(id) => handleSessionChange(id)}
+              />
               <Button
                 variant="secondary"
                 onClick={handleNewSession}
@@ -650,7 +748,9 @@ export function CaseDetail() {
           />
         )}
 
-        {activeTab === 'advisor' && <AdvisorTab caseId={caseId} />}
+        {activeTab === 'advisor' && (
+          <AdvisorTab caseId={caseId} sessionId={activeSessionId} />
+        )}
 
         {activeTab === 'generated' && (
           <Card title="Generated Documents">

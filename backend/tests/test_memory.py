@@ -181,3 +181,118 @@ async def test_create_block_validation_422():
         )
         # No auth -> 401; if we had auth, invalid session_id might yield 403
         assert r.status_code in (401, 422, 403)
+
+
+# --- SessionManager ---
+
+
+@pytest.mark.asyncio
+async def test_session_manager_get_active_session_with_multiple_sessions():
+    """SessionManager.get_active_session returns most recent active session for case."""
+    from unittest.mock import AsyncMock
+    from uuid import uuid4
+
+    from backend.memory.session_manager import SessionManager
+
+    case_id = uuid4()
+    session_active = type("CaseSession", (), {
+        "id": uuid4(),
+        "case_id": case_id,
+        "session_number": 2,
+        "status": "active",
+    })()
+    session_completed = type("CaseSession", (), {
+        "id": uuid4(),
+        "case_id": case_id,
+        "session_number": 1,
+        "status": "completed",
+    })()
+
+    mock_result = type("Result", (), {"scalar_one_or_none": lambda: session_active})()
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    manager = SessionManager(mock_session)
+    result = await manager.get_active_session(case_id)
+    assert result is session_active
+    mock_session.execute.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_session_manager_update_session_status():
+    """SessionManager.update_session_status marks session as completed."""
+    from datetime import datetime
+    from unittest.mock import AsyncMock
+    from uuid import uuid4
+
+    from backend.memory.session_manager import SessionManager
+
+    session_id = uuid4()
+    session = type("CaseSession", (), {
+        "id": session_id,
+        "status": "active",
+        "completed_at": None,
+    })()
+    session.status = "active"
+    session.completed_at = None
+
+    mock_get = type("Result", (), {"scalar_one_or_none": lambda: session})()
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_get)
+    mock_session.flush = AsyncMock()
+    mock_session.refresh = AsyncMock()
+
+    manager = SessionManager(mock_session)
+    completed_at = datetime.utcnow()
+    result = await manager.update_session_status(
+        session_id, status="completed", completed_at=completed_at
+    )
+    assert result is session
+    assert session.status == "completed"
+    assert session.completed_at == completed_at
+
+
+@pytest.mark.asyncio
+async def test_session_manager_get_session_summary_with_block_types():
+    """SessionManager.get_session_summary returns session with memory block counts by type."""
+    from unittest.mock import AsyncMock
+    from uuid import uuid4
+
+    from backend.memory.session_manager import SessionManager
+
+    session_id = uuid4()
+    session = type("CaseSession", (), {
+        "id": session_id,
+        "case_id": uuid4(),
+        "session_number": 1,
+        "status": "active",
+    })()
+    result_session = type("Result", (), {"scalar_one_or_none": lambda: session})()
+    result_counts = type("Result", (), {"all": lambda: [("fact", 3), ("evidence", 2)]})()
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        side_effect=[result_session, result_counts]
+    )
+
+    manager = SessionManager(mock_session)
+    summary = await manager.get_session_summary(session_id)
+    assert summary is not None
+    assert summary["session"] is session
+    assert len(summary["memory_block_counts"]) == 2
+    assert summary["total_blocks"] == 5
+
+
+@pytest.mark.asyncio
+async def test_session_endpoints_require_auth():
+    """Session endpoints require authentication (ownership validated when authenticated)."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.get(
+            "/api/cases/00000000-0000-0000-0000-000000000001/sessions/00000000-0000-0000-0000-000000000002"
+        )
+        assert r.status_code == 401
+        r2 = await client.get(
+            "/api/cases/00000000-0000-0000-0000-000000000001/active-session"
+        )
+        assert r2.status_code == 401

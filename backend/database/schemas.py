@@ -78,6 +78,22 @@ class CaseSessionUpdate(BaseModel):
     completed_at: Optional[datetime] = None
 
 
+class MemoryBlockCount(BaseModel):
+    block_type: str
+    count: int
+
+
+class CaseSessionSummary(CaseSessionRead):
+    """Session with memory block counts by type and total."""
+
+    memory_block_counts: List[MemoryBlockCount] = []
+
+    @computed_field
+    @property
+    def total_blocks(self) -> int:
+        return sum(c.count for c in self.memory_block_counts)
+
+
 # --- MemoryBlock Schemas ---
 def _validate_content_non_empty(v: str) -> str:
     """Reject empty or whitespace-only content; return stripped string."""

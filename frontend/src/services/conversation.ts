@@ -19,7 +19,7 @@ export async function sendMessage(
     onComplete: () => void;
     onError: (error: Error) => void;
   },
-  options?: { includeContext?: boolean }
+  options?: { includeContext?: boolean; sessionId?: string | null }
 ): Promise<void> {
   const token = getStoredToken();
   if (!token) {
@@ -27,10 +27,14 @@ export async function sendMessage(
     return;
   }
   const url = `${baseURL}/api/cases/${caseId}/advisor/message`;
-  const body = JSON.stringify({
+  const body: { message: string; include_context: boolean; session_id?: string } = {
     message,
     include_context: options?.includeContext ?? true,
-  });
+  };
+  if (options?.sessionId) {
+    body.session_id = options.sessionId;
+  }
+  const bodyStr = JSON.stringify(body);
   const controller = new AbortController();
   try {
     const res = await fetch(url, {
@@ -39,7 +43,7 @@ export async function sendMessage(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body,
+      body: bodyStr,
       signal: controller.signal,
     });
     if (!res.ok) {

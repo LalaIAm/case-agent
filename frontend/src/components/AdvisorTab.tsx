@@ -19,9 +19,11 @@ import { MessageBubble } from './MessageBubble';
 
 interface AdvisorTabProps {
   caseId: string;
+  /** When set, advisor context can be scoped to this session. */
+  sessionId?: string | null;
 }
 
-export function AdvisorTab({ caseId }: AdvisorTabProps) {
+export function AdvisorTab({ caseId, sessionId }: AdvisorTabProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -31,6 +33,7 @@ export function AdvisorTab({ caseId }: AdvisorTabProps) {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [useSessionContext, setUseSessionContext] = useState(!!sessionId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -87,6 +90,7 @@ export function AdvisorTab({ caseId }: AdvisorTabProps) {
     setStreamingContextUsed([]);
     setIsStreaming(true);
 
+    const effectiveSessionId = useSessionContext ? sessionId ?? undefined : undefined;
     sendMessage(
       caseId,
       trimmed,
@@ -104,9 +108,9 @@ export function AdvisorTab({ caseId }: AdvisorTabProps) {
           setStreamingMessage('');
         },
       },
-      { includeContext: true }
+      { includeContext: true, sessionId: effectiveSessionId }
     );
-  }, [caseId, inputMessage, isStreaming, loadHistory, loadSuggestions]);
+  }, [caseId, inputMessage, isStreaming, loadHistory, loadSuggestions, useSessionContext, sessionId]);
 
   const handleReanalyze = useCallback(async () => {
     if (!window.confirm('Re-run the analysis workflow for this case?')) return;
@@ -137,17 +141,37 @@ export function AdvisorTab({ caseId }: AdvisorTabProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const contextLabel = useSessionContext && sessionId
+    ? 'Using session-specific context'
+    : 'Using case-wide context';
+
   return (
     <Card title="Case Advisor" className="flex flex-col">
       <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" onClick={handleClearHistory} disabled={historyLoading}>
             Clear History
           </Button>
           <Button variant="secondary" onClick={handleReanalyze}>
             Re-analyze Case
           </Button>
+          {sessionId != null && (
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={useSessionContext}
+                onChange={(e) => setUseSessionContext(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              Session-only context
+            </label>
+          )}
         </div>
+        {sessionId != null && (
+          <p className="text-xs text-gray-500" aria-live="polite">
+            {contextLabel}
+          </p>
+        )}
 
         {error && (
           <div className="flex items-center justify-between rounded bg-red-50 px-3 py-2 text-sm text-red-800">

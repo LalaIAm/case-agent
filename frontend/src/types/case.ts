@@ -31,6 +31,16 @@ export interface CaseSession {
   status: string;
 }
 
+export interface MemoryBlockCount {
+  block_type: string;
+  count: number;
+}
+
+export interface CaseSessionSummary extends CaseSession {
+  memory_block_counts: MemoryBlockCount[];
+  total_blocks: number;
+}
+
 export interface DocumentInCase {
   id: string;
   case_id: string;

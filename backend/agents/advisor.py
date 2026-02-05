@@ -51,10 +51,15 @@ class ConversationalAdvisor:
         result = await self._db.execute(stmt)
         return list(result.scalars().unique().all())
 
-    async def build_context(self, query: Optional[str] = None) -> tuple[str, List[str]]:
+    async def build_context(
+        self,
+        query: Optional[str] = None,
+        session_id: Optional[UUID] = None,
+    ) -> tuple[str, List[str]]:
         """
-        Build context string from memory. If query is provided, use semantic search;
-        otherwise use get_case_context. Returns (context_string, list of block types used).
+        Build context string from memory. If session_id is set, scope to that session;
+        otherwise use case-wide context. If query is provided, use semantic search;
+        otherwise use get_case_context or get_session_blocks. Returns (context_string, list of block types used).
         Truncates to stay within token limits.
         """
         manager = self._get_memory_manager()
@@ -62,15 +67,22 @@ class ConversationalAdvisor:
             blocks_with_scores = await manager.search_similar_blocks(
                 query=query.strip(),
                 case_id=self._case_id,
+                session_id=session_id,
                 limit=30,
             )
             blocks = [b for b, _ in blocks_with_scores]
         else:
-            blocks = await manager.get_case_context(
-                self._case_id,
-                block_types=None,
-                limit=50,
-            )
+            if session_id is not None:
+                blocks = await manager.get_session_blocks(
+                    session_id,
+                    block_types=None,
+                )
+            else:
+                blocks = await manager.get_case_context(
+                    self._case_id,
+                    block_types=None,
+                    limit=50,
+                )
         if not blocks:
             return "", []
         types_used = list({b.block_type for b in blocks})
@@ -80,11 +92,14 @@ class ConversationalAdvisor:
         return context, types_used
 
     async def generate_response_stream(
-        self, user_message: str, include_context: bool = True
+        self,
+        user_message: str,
+        include_context: bool = True,
+        session_id: Optional[UUID] = None,
     ) -> AsyncGenerator[str, None]:
         """
         Create user message record, build context, call OpenAI streaming, yield chunks,
-        then save assistant message.
+        then save assistant message. If session_id is set, context is scoped to that session.
         """
         user_msg = ConversationMessage(
             case_id=self._case_id,
@@ -98,7 +113,10 @@ class ConversationalAdvisor:
         context_str = ""
         context_used: List[str] = []
         if include_context:
-            context_str, context_used = await self.build_context(user_message.strip())
+            context_str, context_used = await self.build_context(
+                user_message.strip(),
+                session_id=session_id,
+            )
         conversation = await self.get_conversation_history(limit=20)
         messages: List[Dict[str, str]] = []
         if context_str:

@@ -15,11 +15,14 @@ from backend.database.schemas import (
     CaseCreate,
     CaseRead,
     CaseSessionRead,
-    CaseUpdate,
+    CaseSessionSummary,
+    CaseSessionUpdate,
     CaseWithRelations,
     DocumentRead,
+    MemoryBlockCount,
 )
 from backend.dependencies import get_db_session
+from backend.memory.session_manager import SessionManager
 from backend.memory.utils import validate_case_ownership
 
 router = APIRouter(prefix="", tags=["cases"])
@@ -220,4 +223,99 @@ async def create_session(
     db.add(session)
     await db.flush()
     await db.refresh(session)
+    return CaseSessionRead.model_validate(session)
+
+
+@router.get("/{case_id}/sessions/{session_id}", response_model=CaseSessionRead)
+async def get_session(
+    case_id: UUID,
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db_session),
+    user: User = Depends(current_active_user),
+):
+    """Retrieve a specific session. Validates case ownership."""
+    if not await validate_case_ownership(db, case_id, user.id):
+        result = await db.execute(select(Case).where(Case.id == case_id))
+        if result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Case not found")
+        raise HTTPException(status_code=403, detail="Not authorized to access this case")
+    result = await db.execute(
+        select(CaseSession).where(
+            CaseSession.id == session_id,
+            CaseSession.case_id == case_id,
+        )
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return CaseSessionRead.model_validate(session)
+
+
+@router.put("/{case_id}/sessions/{session_id}", response_model=CaseSessionRead)
+async def update_session(
+    case_id: UUID,
+    session_id: UUID,
+    body: CaseSessionUpdate,
+    db: AsyncSession = Depends(get_db_session),
+    user: User = Depends(current_active_user),
+):
+    """Update session status and completed_at. Validates case ownership."""
+    if not await validate_case_ownership(db, case_id, user.id):
+        result = await db.execute(select(Case).where(Case.id == case_id))
+        if result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Case not found")
+        raise HTTPException(status_code=403, detail="Not authorized to update this session")
+    manager = SessionManager(db)
+    session = await manager.get_session(session_id)
+    if not session or session.case_id != case_id:
+        raise HTTPException(status_code=404, detail="Session not found")
+    updated = await manager.update_session_status(
+        session_id,
+        status=body.status if body.status is not None else session.status,
+        completed_at=body.completed_at,
+    )
+    return CaseSessionRead.model_validate(updated)
+
+
+@router.get("/{case_id}/sessions/{session_id}/summary", response_model=CaseSessionSummary)
+async def get_session_summary(
+    case_id: UUID,
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db_session),
+    user: User = Depends(current_active_user),
+):
+    """Return session metadata including memory block counts by type."""
+    if not await validate_case_ownership(db, case_id, user.id):
+        result = await db.execute(select(Case).where(Case.id == case_id))
+        if result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Case not found")
+        raise HTTPException(status_code=403, detail="Not authorized to access this case")
+    manager = SessionManager(db)
+    summary_data = await manager.get_session_summary(session_id)
+    if not summary_data or summary_data["session"].case_id != case_id:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session = summary_data["session"]
+    counts = [MemoryBlockCount.model_validate(c) for c in summary_data["memory_block_counts"]]
+    return CaseSessionSummary(
+        **CaseSessionRead.model_validate(session).model_dump(),
+        memory_block_counts=counts,
+    )
+
+
+@router.get("/{case_id}/active-session", response_model=CaseSessionRead)
+async def get_active_session(
+    case_id: UUID,
+    db: AsyncSession = Depends(get_db_session),
+    user: User = Depends(current_active_user),
+):
+    """Get the current active session for the case. Returns 404 if none active."""
+    if not await validate_case_ownership(db, case_id, user.id):
+        result = await db.execute(select(Case).where(Case.id == case_id))
+        if result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Case not found")
+        raise HTTPException(status_code=403, detail="Not authorized to access this case")
+    manager = SessionManager(db)
+    session = await manager.get_active_session(case_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="No active session")
     return CaseSessionRead.model_validate(session)
