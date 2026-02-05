@@ -5,7 +5,27 @@ from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, field_validator, model_validator
+
+
+def _strip_str(v: Optional[str], max_len: Optional[int] = None) -> Optional[str]:
+    if v is None:
+        return None
+    s = str(v).strip()
+    if max_len is not None and len(s) > max_len:
+        raise ValueError(f"Must be at most {max_len} characters")
+    return s if s else None
+
+
+def _strip_required(v: str, max_len: Optional[int] = None) -> str:
+    if not isinstance(v, str):
+        raise ValueError("Must be a string")
+    s = v.strip()
+    if not s:
+        raise ValueError("Must not be empty after trimming")
+    if max_len is not None and len(s) > max_len:
+        raise ValueError(f"Must be at most {max_len} characters")
+    return s
 
 
 # --- User Schemas ---
@@ -34,6 +54,16 @@ class UserUpdate(BaseModel):
 class CaseBase(BaseModel):
     title: str = Field(..., max_length=500)
     description: Optional[str] = None
+
+    @field_validator("title")
+    @classmethod
+    def title_stripped(cls, v: str) -> str:
+        return _strip_required(v, 500)
+
+    @field_validator("description")
+    @classmethod
+    def description_stripped(cls, v: Optional[str]) -> Optional[str]:
+        return _strip_str(v, 5000)
 
 
 class CaseCreate(CaseBase):
@@ -86,7 +116,7 @@ class MemoryBlockCount(BaseModel):
 class CaseSessionSummary(CaseSessionRead):
     """Session with memory block counts by type and total."""
 
-    memory_block_counts: List[MemoryBlockCount] = []
+    memory_block_counts: List[MemoryBlockCount] = Field(default_factory=list)
 
     @computed_field
     @property
@@ -149,6 +179,19 @@ class MemoryBlockSearch(BaseModel):
 class DocumentBase(BaseModel):
     filename: str
     file_type: str
+
+    @field_validator("filename")
+    @classmethod
+    def filename_stripped(cls, v: str) -> str:
+        s = _strip_required(v, 255)
+        if "/" in s or "\\" in s:
+            raise ValueError("Filename must not contain path separators")
+        return s
+
+    @field_validator("file_type")
+    @classmethod
+    def file_type_stripped(cls, v: str) -> str:
+        return _strip_required(v, 50)
 
 
 class DocumentCreate(DocumentBase):
@@ -229,6 +272,11 @@ class GeneratedDocumentBase(BaseModel):
     document_type: Literal["statement_of_claim", "hearing_script", "legal_advice"]
     content: str
 
+    @field_validator("content")
+    @classmethod
+    def content_stripped(cls, v: str) -> str:
+        return _strip_required(v, 500_000)
+
 
 class GeneratedDocumentCreate(GeneratedDocumentBase):
     case_id: UUID
@@ -290,6 +338,16 @@ class RuleBase(BaseModel):
     content: str
     metadata_: Optional[Dict[str, Any]] = None
 
+    @field_validator("source", "title")
+    @classmethod
+    def strip_str_500(cls, v: str) -> str:
+        return _strip_required(v, 500)
+
+    @field_validator("content")
+    @classmethod
+    def content_stripped(cls, v: str) -> str:
+        return _strip_required(v, 50_000)
+
 
 class RuleCreate(RuleBase):
     rule_type: Literal["statute", "procedure", "case_law", "interpretation"]
@@ -323,8 +381,13 @@ def _default_rules_limit() -> int:
 class RuleSearch(BaseModel):
     query: str
     rule_types: Optional[List[str]] = None
-    limit: int = Field(default_factory=_default_rules_limit)
-    min_similarity: Optional[float] = None
+    limit: int = Field(default_factory=_default_rules_limit, ge=1, le=100)
+    min_similarity: Optional[float] = Field(None, ge=0.0, le=1.0)
+
+    @field_validator("query")
+    @classmethod
+    def query_stripped(cls, v: str) -> str:
+        return _strip_required(v, 2000)
 
 
 class HybridRuleSearch(RuleSearch):
@@ -344,6 +407,11 @@ class TavilySearchRequest(BaseModel):
     include_domains: Optional[List[str]] = None
     exclude_domains: Optional[List[str]] = None
     topic: str = "general"
+
+    @field_validator("query", "topic")
+    @classmethod
+    def strip_query_topic(cls, v: str) -> str:
+        return _strip_required(v, 1000)
 
 
 class TavilySearchResponse(BaseModel):

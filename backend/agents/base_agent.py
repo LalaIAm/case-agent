@@ -1,6 +1,8 @@
 """
-Abstract base class for all agents: OpenAI integration, AgentRun logging, error handling.
+Abstract base class for all agents: OpenAI integration, AgentRun logging, error handling, timeout.
 """
+import asyncio
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -12,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database.models import AgentRun
 from backend.memory.memory_manager import MemoryManager
+
+logger = logging.getLogger(__name__)
 
 
 class BaseAgent(ABC):
@@ -96,11 +100,15 @@ class BaseAgent(ABC):
 
     async def run(self) -> AgentRun:
         """
-        Create AgentRun, call execute() with try/except, update with success/failure, return AgentRun.
+        Create AgentRun, call execute() with timeout and try/except, update with success/failure, return AgentRun.
         """
+        from backend.config import get_settings
+        settings = get_settings()
+        timeout_sec = getattr(settings, "AGENT_TIMEOUT_SECONDS", 300)
+
         run = await self._create_agent_run()
         try:
-            result = await self.execute(run.id)
+            result = await asyncio.wait_for(self.execute(run.id), timeout=timeout_sec)
             await self._update_agent_run(
                 run.id,
                 status="completed",
@@ -109,6 +117,16 @@ class BaseAgent(ABC):
             )
             await self._db.refresh(run)
             return run
+        except asyncio.TimeoutError as e:
+            logger.warning("Agent %s timed out after %s seconds", self.agent_name, timeout_sec)
+            await self._update_agent_run(
+                run.id,
+                status="failed",
+                error_message=f"Timeout after {timeout_sec}s",
+                completed_at=datetime.now(timezone.utc),
+            )
+            await self._db.refresh(run)
+            raise
         except Exception as e:
             await self._update_agent_run(
                 run.id,

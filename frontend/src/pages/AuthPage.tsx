@@ -1,10 +1,15 @@
 /**
- * Login / register page with mode toggle.
+ * Login / register page with mode toggle and useForm validation.
  */
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/Button';
+import { useForm } from '../hooks/useForm';
+import { email, compose, required, minLength } from '../utils/validators';
+import { getErrorMessage } from '../utils/errorHandler';
+
+const initialValues = { email: '', password: '' };
 
 export function AuthPage() {
   const navigate = useNavigate();
@@ -13,32 +18,40 @@ export function AuthPage() {
   const [mode, setMode] = useState<'login' | 'register'>(
     location.pathname === '/register' ? 'register' : 'login'
   );
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const {
+    values,
+    getFieldProps,
+    handleSubmit: formHandleSubmit,
+    validateAll,
+  } = useForm(
+    initialValues,
+    {
+      email,
+      password: compose(required, minLength(8)),
+    }
+  );
 
   useEffect(() => {
     setMode(location.pathname === '/register' ? 'register' : 'login');
   }, [location.pathname]);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    if (!validateAll()) return;
     setLoading(true);
     try {
       if (mode === 'login') {
-        await login(email, password);
+        await login(values.email, values.password);
       } else {
-        await register(email, password);
+        await register(values.email, values.password);
       }
       navigate('/', { replace: true });
     } catch (err: unknown) {
-      const message =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-          : 'Something went wrong';
-      setError(typeof message === 'string' ? message : JSON.stringify(message));
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -63,11 +76,22 @@ export function AuthPage() {
                 id="email"
                 type="email"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                value={getFieldProps('email').value}
+                onChange={getFieldProps('email').onChange}
+                onBlur={getFieldProps('email').onBlur}
+                aria-describedby={getFieldProps('email').touched && getFieldProps('email').error ? 'email-error' : undefined}
+                className={`w-full rounded-md border px-3 py-2 text-gray-900 focus:outline-none focus:ring-1 ${
+                  getFieldProps('email').error && getFieldProps('email').touched
+                    ? 'border-red-500 focus:border-red-600 focus:ring-red-600'
+                    : 'border-gray-300 focus:border-blue-600 focus:ring-blue-600'
+                }`}
                 autoComplete="email"
               />
+              {getFieldProps('email').touched && getFieldProps('email').error && (
+                <p id="email-error" className="mt-1 text-sm text-red-600" role="alert">
+                  {getFieldProps('email').error}
+                </p>
+              )}
             </div>
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
@@ -78,13 +102,24 @@ export function AuthPage() {
                 type="password"
                 required
                 minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                value={getFieldProps('password').value}
+                onChange={getFieldProps('password').onChange}
+                onBlur={getFieldProps('password').onBlur}
+                aria-describedby={getFieldProps('password').touched && getFieldProps('password').error ? 'password-error' : undefined}
+                className={`w-full rounded-md border px-3 py-2 text-gray-900 focus:outline-none focus:ring-1 ${
+                  getFieldProps('password').error && getFieldProps('password').touched
+                    ? 'border-red-500 focus:border-red-600 focus:ring-red-600'
+                    : 'border-gray-300 focus:border-blue-600 focus:ring-blue-600'
+                }`}
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               />
               {mode === 'register' && (
                 <p className="mt-1 text-xs text-gray-500">At least 8 characters</p>
+              )}
+              {getFieldProps('password').touched && getFieldProps('password').error && (
+                <p id="password-error" className="mt-1 text-sm text-red-600" role="alert">
+                  {getFieldProps('password').error}
+                </p>
               )}
             </div>
             {error && (

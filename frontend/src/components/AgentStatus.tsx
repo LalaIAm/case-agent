@@ -17,6 +17,8 @@ import {
   AgentNotificationContainer,
   type AgentNotificationItem,
 } from './AgentNotification';
+import { ConnectionStatus as ConnectionStatusIndicator } from './ConnectionStatus';
+import type { ConnectionState } from '../services/websocket';
 
 const WORKFLOW_STEPS = ['intake', 'research', 'document', 'strategy', 'drafting'];
 
@@ -59,6 +61,7 @@ export function AgentStatus({
   });
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>('connecting');
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const wsClientRef = useRef<AgentWebSocketClient | null>(null);
   const [notifications, setNotifications] = useState<AgentNotificationItem[]>([]);
@@ -126,6 +129,7 @@ export function AgentStatus({
         onConnect: () => {
           setConnectionStatus('connected');
           setConnectionError(null);
+          setReconnectAttempt(0);
         },
         onDisconnect: () => {
           setConnectionStatus('disconnected');
@@ -133,6 +137,10 @@ export function AgentStatus({
         onError: (err) => {
           setConnectionStatus('error');
           setConnectionError(err.message);
+        },
+        onConnectionState: (state: ConnectionState, attempt?: number) => {
+          setConnectionStatus(state);
+          if (attempt !== undefined) setReconnectAttempt(attempt);
         },
       }
     );
@@ -183,17 +191,29 @@ export function AgentStatus({
         onConnect: () => {
           setConnectionStatus('connected');
           setConnectionError(null);
+          setReconnectAttempt(0);
         },
         onDisconnect: () => setConnectionStatus('disconnected'),
         onError: (err) => {
           setConnectionStatus('error');
           setConnectionError(err.message);
         },
+        onConnectionState: (state: ConnectionState, attempt?: number) => {
+          setConnectionStatus(state);
+          if (attempt !== undefined) setReconnectAttempt(attempt);
+        },
       }
     );
     wsClientRef.current = client;
     client.connect();
   }, [caseId, addNotification]);
+
+  const handleReconnect = useCallback(() => {
+    setConnectionError(null);
+    setConnectionStatus('connecting');
+    setReconnectAttempt(0);
+    wsClientRef.current?.reconnect();
+  }, []);
 
   const agentList: AgentListItem[] = WORKFLOW_STEPS.map((name) => {
     const entry = agentStatuses.get(name);
@@ -245,31 +265,15 @@ export function AgentStatus({
       />
 
       <Card title="Workflow Progress">
-        <div className="mb-4 flex items-center gap-3">
-          <span
-            className={`inline-block h-2 w-2 rounded-full ${
-              connectionStatus === 'connected'
-                ? 'bg-green-500'
-                : connectionStatus === 'connecting'
-                  ? 'bg-amber-500 animate-pulse'
-                  : 'bg-red-500'
-            }`}
-            title={
-              connectionStatus === 'connected'
-                ? 'Connected'
-                : connectionStatus === 'connecting'
-                  ? 'Connecting'
-                  : 'Disconnected'
-            }
-            aria-hidden
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <ConnectionStatusIndicator
+            state={connectionStatus as ConnectionState}
+            reconnectAttempt={reconnectAttempt}
+            onReconnect={handleReconnect}
           />
-          <span className="text-sm text-gray-600">
-            {connectionStatus === 'connected'
-              ? 'Live'
-              : connectionStatus === 'connecting'
-                ? 'Connecting…'
-                : 'Disconnected'}
-          </span>
+          {connectionStatus === 'connected' && (
+            <span className="text-sm text-gray-600">Live</span>
+          )}
           <Badge variant={workflowBadgeVariant(workflowState.workflow_status)}>
             {workflowState.workflow_status}
           </Badge>

@@ -1,6 +1,8 @@
 """
 Workflow coordination and execution: handoffs, state transitions, WebSocket broadcasts.
+Uses retry policy with exponential backoff and jitter for agent runs.
 """
+import asyncio
 import logging
 from typing import Any, Optional, TYPE_CHECKING
 from uuid import UUID
@@ -8,6 +10,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.agents.concrete_agents import AGENT_CLASSES
+from backend.agents.retry_policy import backoff_delay, is_retryable, with_retries
 from backend.agents.state import WorkflowState, WorkflowStateManager
 
 if TYPE_CHECKING:
@@ -97,12 +100,15 @@ class AgentOrchestrator:
                 logger.warning("Unknown agent name: %s", agent_name)
                 continue
 
+            async def run_agent_once():
+                agent = agent_cls(self._db, self._case_id, self._user_id)
+                return await agent.run()
+
             last_error: Optional[Exception] = None
             for attempt in range(retries):
                 try:
                     await self._broadcast_status(agent_name, "running", progress=int((i / total) * 100))
-                    agent = agent_cls(self._db, self._case_id, self._user_id)
-                    run = await agent.run()
+                    run = await with_retries(run_agent_once, max_attempts=1)
                     await self._db.commit()
                     state.completed_agents.append(agent_name)
                     if run.result:
@@ -116,7 +122,11 @@ class AgentOrchestrator:
                     last_error = e
                     await self._db.commit()
                     logger.exception("Agent %s attempt %s failed: %s", agent_name, attempt + 1, e)
-                    if attempt == retries - 1:
+                    if attempt < retries - 1 and is_retryable(e):
+                        delay = backoff_delay(attempt)
+                        logger.warning("Retrying agent %s in %.1fs (attempt %s)", agent_name, delay, attempt + 2)
+                        await asyncio.sleep(delay)
+                    else:
                         state.workflow_status = "failed"
                         state.error = str(e)
                         await self._broadcast_status(agent_name, "failed", reasoning=str(e))

@@ -9,6 +9,8 @@ from typing import List
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+
+from backend.exceptions import DocumentNotFoundError, UnauthorizedError
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,7 +79,7 @@ async def upload_document(
     """
     settings = get_settings()
     if not await validate_case_ownership(db, case_id, user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to add documents to this case")
+        raise UnauthorizedError("Not authorized to add documents to this case.")
 
     max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
     allowed = [e.lower().strip() for e in settings.ALLOWED_FILE_TYPES]
@@ -196,7 +198,7 @@ async def list_documents(
 ):
     """List all documents for a case. User must own the case."""
     if not await validate_case_ownership(db, case_id, user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to access this case")
+        raise UnauthorizedError("Not authorized to access this case.")
     result = await db.execute(select(Document).where(Document.case_id == case_id).order_by(Document.uploaded_at.desc()))
     documents = result.scalars().all()
     return [DocumentRead.model_validate(d) for d in documents]
@@ -214,7 +216,7 @@ async def get_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     if not await validate_case_ownership(db, doc.case_id, user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to access this document")
+        raise UnauthorizedError("Not authorized to access this document.")
     return DocumentRead.model_validate(doc)
 
 
@@ -228,9 +230,9 @@ async def download_document(
     result = await db.execute(select(Document).where(Document.id == document_id))
     doc = result.scalar_one_or_none()
     if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise DocumentNotFoundError("Document not found.", document_id=str(document_id))
     if not await validate_case_ownership(db, doc.case_id, user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to access this document")
+        raise UnauthorizedError("Not authorized to access this document.")
 
     upload_dir = Path(get_settings().UPLOAD_DIR)
     full_path = upload_dir / doc.file_path
@@ -294,9 +296,9 @@ async def generate_document_pdf(
     )
     gen_doc = result.scalar_one_or_none()
     if not gen_doc:
-        raise HTTPException(status_code=404, detail="Generated document not found")
+        raise DocumentNotFoundError("Generated document not found.", document_id=str(document_id))
     if not await validate_case_ownership(db, gen_doc.case_id, user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to access this document")
+        raise UnauthorizedError("Not authorized to access this document.")
 
     generator = _GENERATORS.get(gen_doc.document_type)
     if not generator:
@@ -349,9 +351,9 @@ async def download_generated_document(
     )
     gen_doc = result.scalar_one_or_none()
     if not gen_doc:
-        raise HTTPException(status_code=404, detail="Generated document not found")
+        raise DocumentNotFoundError("Generated document not found.", document_id=str(document_id))
     if not await validate_case_ownership(db, gen_doc.case_id, user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to access this document")
+        raise UnauthorizedError("Not authorized to access this document.")
     if not gen_doc.file_path:
         raise HTTPException(
             status_code=404,
@@ -379,7 +381,7 @@ async def list_generated_documents(
 ):
     """List all generated documents for a case, ordered by generated_at desc."""
     if not await validate_case_ownership(db, case_id, user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to access this case")
+        raise UnauthorizedError("Not authorized to access this case.")
     result = await db.execute(
         select(GeneratedDocument)
         .where(GeneratedDocument.case_id == case_id)
@@ -401,9 +403,9 @@ async def regenerate_document(
     )
     existing = result.scalar_one_or_none()
     if not existing:
-        raise HTTPException(status_code=404, detail="Generated document not found")
+        raise DocumentNotFoundError("Generated document not found.", document_id=str(document_id))
     if not await validate_case_ownership(db, existing.case_id, user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to access this document")
+        raise UnauthorizedError("Not authorized to access this document.")
 
     generator = _GENERATORS.get(existing.document_type)
     if not generator:
@@ -460,9 +462,9 @@ async def delete_generated_document(
     )
     gen_doc = result.scalar_one_or_none()
     if not gen_doc:
-        raise HTTPException(status_code=404, detail="Generated document not found")
+        raise DocumentNotFoundError("Generated document not found.", document_id=str(document_id))
     if not await validate_case_ownership(db, gen_doc.case_id, user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to delete this document")
+        raise UnauthorizedError("Not authorized to delete this document.")
 
     if gen_doc.file_path:
         full_path = Path(get_settings().GENERATED_DOCS_DIR) / gen_doc.file_path

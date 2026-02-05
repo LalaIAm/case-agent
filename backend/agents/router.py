@@ -6,6 +6,8 @@ from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+
+from backend.exceptions import AgentRunNotFoundError, UnauthorizedError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,7 +70,7 @@ async def get_agent_status(
 ) -> Any:
     """Return current workflow state and all AgentRun records for the case with progress percentage."""
     if not await validate_case_ownership(db, case_id, user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to access this case")
+        raise UnauthorizedError("Not authorized to access this case.")
     state_manager = WorkflowStateManager(db, case_id)
     state = await state_manager.get_state()
     result = await db.execute(
@@ -97,9 +99,9 @@ async def get_agent_run(
     )
     run = result.scalar_one_or_none()
     if not run:
-        raise HTTPException(status_code=404, detail="Agent run not found")
+        raise AgentRunNotFoundError("Agent run not found.", run_id=str(run_id))
     if not await validate_case_ownership(db, run.case_id, user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to access this run")
+        raise UnauthorizedError("Not authorized to access this run.")
     return run
 
 
@@ -135,7 +137,7 @@ async def get_workflow_status(
 ) -> Any:
     """Return workflow state: completed_agents, pending_agents, current_agent, overall_status."""
     if not await validate_case_ownership(db, case_id, user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to access this case")
+        raise UnauthorizedError("Not authorized to access this case.")
     orchestrator = AgentOrchestrator(db, case_id, user.id)
     state = await orchestrator.get_workflow_status()
     completed = set(state.completed_agents)

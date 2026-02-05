@@ -92,6 +92,19 @@ class Settings(BaseSettings):
     DOCUMENT_BATCH_SIZE: int = Field(default=10, ge=1, le=50, description="Documents to process per document agent run")
     AGENT_CONTEXT_WINDOW: int = Field(default=12000, ge=1000, le=128000, description="Max characters for OpenAI context")
 
+    # Error handling and rate limiting
+    ENABLE_RATE_LIMITING: bool = Field(default=True, description="Enable rate limiting")
+    RATE_LIMIT_STORAGE: str = Field(
+        default="memory",
+        description="Rate limit storage: memory or redis",
+    )
+    ERROR_INCLUDE_TRACEBACK: bool = Field(
+        default=False,
+        description="Include traceback in error responses (development only)",
+    )
+    LOG_LEVEL: str = Field(default="INFO", description="Logging level")
+    SENTRY_DSN: Optional[str] = Field(default=None, description="Sentry DSN for error tracking")
+
 
 @lru_cache
 def get_settings() -> Settings:

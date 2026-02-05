@@ -1,12 +1,16 @@
 /**
- * API client with JWT auth and auth helpers.
+ * API client with JWT auth, timeout, and global error/toast handling.
  */
 import axios, { AxiosError } from 'axios';
+import { getGlobalToast } from '../contexts/ToastContext';
+import { getErrorMessage } from '../utils/errorHandler';
 
 const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+const timeoutMs = Number(import.meta.env.VITE_API_TIMEOUT) || 30_000;
 
 export const api = axios.create({
   baseURL,
+  timeout: timeoutMs,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -31,6 +35,15 @@ api.interceptors.response.use(
       if (path !== '/login' && path !== '/register') {
         window.location.href = '/login';
       }
+    }
+    // Show toast for server errors and network/timeout
+    const status = error.response?.status;
+    const isServerError = status != null && status >= 500;
+    const isNetworkOrTimeout =
+      error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED';
+    if (isServerError || isNetworkOrTimeout) {
+      const toast = getGlobalToast();
+      if (toast) toast.showError(getErrorMessage(error));
     }
     return Promise.reject(error);
   }

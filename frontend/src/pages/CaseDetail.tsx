@@ -1,7 +1,7 @@
 /**
  * Case detail page with tabs: Overview, Documents, Agent Status, Generated Documents.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
@@ -37,6 +37,7 @@ import { DocumentComparison } from '../components/DocumentComparison';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SessionSelector } from '../components/SessionSelector';
 import { SessionHistory } from '../components/SessionHistory';
+import { SessionMetadata } from '../components/SessionMetadata';
 import { SessionContextIndicator } from '../components/SessionContextIndicator';
 import {
   getActiveSessionForCase,
@@ -115,6 +116,14 @@ export function CaseDetail() {
     onConfirm: () => void;
   } | null>(null);
 
+  const activeSession = useMemo(
+    () =>
+      activeSessionId
+        ? sessions.find((s) => s.id === activeSessionId) ?? null
+        : null,
+    [sessions, activeSessionId]
+  );
+
   const loadCase = useCallback(async () => {
     if (!caseId) return;
     setLoading(true);
@@ -169,6 +178,23 @@ export function CaseDetail() {
   useEffect(() => {
     if (sessions.length > 0) loadActiveSession();
   }, [sessions.length, loadActiveSession]);
+
+  // Fetch summary for the active session on load/change so SessionMetadata can show progress and block counts.
+  useEffect(() => {
+    if (!caseId || !activeSessionId) return;
+    if (sessionSummaries.has(activeSessionId)) return;
+    let cancelled = false;
+    getSessionSummary(caseId, activeSessionId)
+      .then((summary) => {
+        if (!cancelled) {
+          setSessionSummaries((prev) => new Map(prev).set(activeSessionId, summary));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [caseId, activeSessionId, sessionSummaries]);
 
   const handleSessionChange = useCallback(
     async (sessionId: string) => {
@@ -678,6 +704,13 @@ export function CaseDetail() {
               )}
             </Card>
             <Card title="Sessions">
+              {activeSession && (
+                <SessionMetadata
+                  session={activeSession}
+                  summary={sessionSummaries.get(activeSession.id) ?? null}
+                  onCompleteSession={handleCompleteSession}
+                />
+              )}
               <SessionHistory
                 caseId={caseId}
                 sessions={sessions}

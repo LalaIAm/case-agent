@@ -4,7 +4,9 @@ REST API endpoints for case CRUD and session management.
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
+
+from backend.exceptions import CaseNotFoundError, SessionNotFoundError, UnauthorizedError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -82,9 +84,9 @@ async def get_case(
     result = await db.execute(select(Case).where(Case.id == case_id))
     case = result.scalar_one_or_none()
     if not case:
-        raise HTTPException(status_code=404, detail="Case not found")
+        raise CaseNotFoundError("Case not found.", case_id=str(case_id))
     if not await validate_case_ownership(db, case_id, user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to access this case")
+        raise UnauthorizedError("Not authorized to access this case.")
     return CaseRead.model_validate(case)
 
 
@@ -98,8 +100,8 @@ async def get_case_details(
     if not await validate_case_ownership(db, case_id, user.id):
         result = await db.execute(select(Case).where(Case.id == case_id))
         if result.scalar_one_or_none() is None:
-            raise HTTPException(status_code=404, detail="Case not found")
-        raise HTTPException(status_code=403, detail="Not authorized to access this case")
+            raise CaseNotFoundError("Case not found.", case_id=str(case_id))
+        raise UnauthorizedError("Not authorized to access this case.")
 
     result = await db.execute(
         select(Case)
@@ -111,7 +113,7 @@ async def get_case_details(
     )
     case = result.scalar_one_or_none()
     if not case:
-        raise HTTPException(status_code=404, detail="Case not found")
+        raise CaseNotFoundError("Case not found.", case_id=str(case_id))
 
     sessions_sorted = sorted(case.sessions, key=lambda s: s.session_number)
     return CaseWithRelations(
@@ -132,13 +134,13 @@ async def update_case(
     if not await validate_case_ownership(db, case_id, user.id):
         result = await db.execute(select(Case).where(Case.id == case_id))
         if result.scalar_one_or_none() is None:
-            raise HTTPException(status_code=404, detail="Case not found")
-        raise HTTPException(status_code=403, detail="Not authorized to update this case")
+            raise CaseNotFoundError("Case not found.", case_id=str(case_id))
+        raise UnauthorizedError("Not authorized to update this case.")
 
     result = await db.execute(select(Case).where(Case.id == case_id))
     case = result.scalar_one_or_none()
     if not case:
-        raise HTTPException(status_code=404, detail="Case not found")
+        raise CaseNotFoundError("Case not found.", case_id=str(case_id))
 
     if body.title is not None:
         case.title = body.title
@@ -184,8 +186,8 @@ async def list_case_sessions(
     if not await validate_case_ownership(db, case_id, user.id):
         result = await db.execute(select(Case).where(Case.id == case_id))
         if result.scalar_one_or_none() is None:
-            raise HTTPException(status_code=404, detail="Case not found")
-        raise HTTPException(status_code=403, detail="Not authorized to access this case")
+            raise CaseNotFoundError("Case not found.", case_id=str(case_id))
+        raise UnauthorizedError("Not authorized to access this case.")
 
     result = await db.execute(
         select(CaseSession)
@@ -247,7 +249,7 @@ async def get_session(
     )
     session = result.scalar_one_or_none()
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise SessionNotFoundError("Session not found.", session_id=str(session_id))
     return CaseSessionRead.model_validate(session)
 
 
@@ -268,7 +270,7 @@ async def update_session(
     manager = SessionManager(db)
     session = await manager.get_session(session_id)
     if not session or session.case_id != case_id:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise SessionNotFoundError("Session not found.", session_id=str(session_id))
     updated = await manager.update_session_status(
         session_id,
         status=body.status if body.status is not None else session.status,
@@ -317,5 +319,5 @@ async def get_active_session(
     manager = SessionManager(db)
     session = await manager.get_active_session(case_id)
     if not session:
-        raise HTTPException(status_code=404, detail="No active session")
+        raise SessionNotFoundError("No active session for this case.", details={"case_id": str(case_id)})
     return CaseSessionRead.model_validate(session)

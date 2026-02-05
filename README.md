@@ -51,6 +51,9 @@ Edit `.env` with your values. Key variables:
 | SECRET_KEY       | JWT secret (min 32 chars)           | your-secret-key-32-chars-min     |
 | FRONTEND_URL     | Frontend origin(s) for CORS         | http://localhost:5173            |
 | ENVIRONMENT      | development / staging / production  | development                      |
+| ENABLE_RATE_LIMITING | Enable API rate limiting        | true                             |
+| LOG_LEVEL        | Logging level                       | INFO                             |
+| SENTRY_DSN       | Optional Sentry DSN for errors      | (optional)                       |
 
 ### 3. Backend setup
 
@@ -182,6 +185,24 @@ sequenceDiagram
   Returns list with `has_pdf` and `download_url` for each.
 
 All require authentication; the user must own the case.
+
+## Error handling and rate limiting
+
+- **Error format**: All API errors return JSON `{ "error": { "type", "message", "details", "request_id" } }`. See [docs/ERROR_HANDLING.md](docs/ERROR_HANDLING.md).
+- **Rate limiting**: When `ENABLE_RATE_LIMITING` is true, endpoints are limited per client (e.g. 100/min). Health and root are exempt. 429 responses include `Retry-After`.
+- **Agents**: Agent runs use a timeout (`AGENT_TIMEOUT_SECONDS`) and retries with exponential backoff on retryable failures.
+
+## Accessibility
+
+- Forms use labels, ARIA, and inline validation errors. See [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md).
+- Keyboard navigation is supported for lists and main actions; toasts and errors are announced to screen readers.
+
+## Troubleshooting
+
+- **401 on API calls**: Ensure you are logged in and the token is sent (`Authorization: Bearer <token>`). Check `frontend/vite.config.ts` proxy and `VITE_API_URL` if calling from a different origin.
+- **429 Too Many Requests**: Wait for the time indicated in `Retry-After` or reduce request frequency.
+- **Agent timeout**: Increase `AGENT_TIMEOUT_SECONDS` in backend config for long-running workflows.
+- **WebSocket disconnect**: The client reconnects with backoff. Use the “Reconnect” control in the Agent Status tab if the connection fails.
 
 ## Development notes
 
