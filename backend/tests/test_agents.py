@@ -182,6 +182,9 @@ async def test_orchestrator_execute_single_agent():
     run.result = {"ok": True}
     db.flush = AsyncMock()
     db.refresh = AsyncMock()
+    result_mock = MagicMock()
+    result_mock.scalars.return_value.unique.return_value.all.return_value = []
+    db.execute = AsyncMock(return_value=result_mock)
 
     with patch("backend.agents.orchestrator.AGENT_CLASSES", {"intake": MockAgent}):
         with patch.object(MockAgent, "_create_agent_run", AsyncMock(return_value=run)):
@@ -405,19 +408,7 @@ async def test_document_agent_processing():
 
     result_docs = MagicMock()
     result_docs.scalars.return_value.unique.return_value.all.return_value = [doc]
-    result_session = MagicMock()
-    result_session.scalar_one_or_none.return_value = session
-    result_blocks = MagicMock()
-    result_blocks.scalars.return_value.unique.return_value.all.return_value = []
-
-    async def execute_side_effect(*args, **kwargs):
-        if "Document" in str(args):
-            return result_docs
-        if "CaseSession" in str(args):
-            return result_session
-        return result_blocks
-
-    db.execute = AsyncMock(side_effect=execute_side_effect)
+    db.execute = AsyncMock(return_value=result_docs)
     db.flush = AsyncMock()
 
     openai_response = MagicMock()
