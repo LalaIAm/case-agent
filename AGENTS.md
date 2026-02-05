@@ -74,7 +74,8 @@ stores generated documents, and supports real-time agent monitoring.
 - `.env.example`: shared environment variables template
 
 ## Environment setup
-- Python 3.11+ and Node 18+ are required.
+- Python 3.11+ and Node 20.19+ (or 22.12+) are required.
+- Optional: use `.nvmrc` to align your local Node version with the frontend tooling.
 - Copy `.env.example` to `.env` and fill in required values:
   - `DATABASE_URL`, `OPENAI_API_KEY`, `TAVILY_API_KEY`, `SECRET_KEY`,
     `FRONTEND_URL`, `ENVIRONMENT`.
