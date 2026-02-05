@@ -1,11 +1,11 @@
 # WebSocket Agent Monitoring – Manual Testing Checklist
 
-Use this checklist when verifying real-time agent status over WebSocket.
+Use this checklist when verifying real-time agent status over **Socket.IO** (path `/ws/agents`, query `caseId` + `token`).
 
-- [ ] **Connection**: WebSocket connects with valid JWT (token in query); status shows "Live" (green dot).
-- [ ] **Reconnection**: After a brief network interruption, client reconnects with exponential backoff (up to 5 attempts).
-- [ ] **Invalid/expired token**: With expired or invalid token, connection closes with code 4001 and user is redirected to login.
-- [ ] **Unauthorized case**: With valid token but no access to the case, connection closes with code 4003 and an error message is shown.
+- [ ] **Connection**: Socket.IO client connects with valid JWT (token in query); status shows "Live" (green dot).
+- [ ] **Reconnection**: After a brief network interruption, client reconnects (socket.io handles reconnection).
+- [ ] **Invalid/expired token**: With expired or invalid token, connection is rejected; user may be redirected to login.
+- [ ] **Unauthorized case**: With valid token but no access to the case, connection is rejected and an error message is shown.
 - [ ] **Multiple tabs**: Open the same case in multiple browser tabs; all tabs receive the same agent/workflow updates.
 - [ ] **Workflow progression**: Run agents and confirm workflow moves through Intake → Research → Document Analysis → Strategy → Drafting; progress bar and diagram update in real time.
 - [ ] **Agent failure**: If an agent fails, error state is shown (red, failed step) and notification appears.

@@ -28,11 +28,11 @@ from .utils import calculate_workflow_progress
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
-from backend.agents.websocket_manager import websocket_manager as _ws_manager
+from backend.agents.socketio_manager import socketio_manager as _ws_manager
 
 
 def _get_websocket_manager():
-    """Return singleton WebSocket manager."""
+    """Return singleton Socket.IO manager for agent status broadcasts."""
     return _ws_manager
 
 

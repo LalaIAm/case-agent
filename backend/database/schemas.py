@@ -362,3 +362,33 @@ class StatuteSearchRequest(BaseModel):
     topic: str
     statute_reference: Optional[str] = None
     max_results: int = Field(default=3, ge=1, le=20)
+
+
+# --- Conversation (Advisor) Schemas ---
+class ConversationMessageBase(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class ConversationMessageCreate(ConversationMessageBase):
+    case_id: UUID
+
+
+class ConversationMessageRead(ConversationMessageBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    case_id: UUID
+    metadata_: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+
+class ConversationRequest(BaseModel):
+    case_id: UUID
+    message: str
+    include_context: bool = True
+
+
+class ConversationResponse(BaseModel):
+    message_id: UUID
+    response: str
+    context_used: List[str] = []

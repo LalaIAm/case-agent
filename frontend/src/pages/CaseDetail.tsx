@@ -13,22 +13,28 @@ import {
   getCaseDetails,
   updateCase,
   deleteCase,
-  getCaseSessions,
   createSession,
 } from '../services/cases';
 import {
   getGeneratedDocuments,
   generateDocumentPdf,
   downloadGeneratedDocument,
+  regenerateDocument,
+  deleteGeneratedDocument,
   downloadDocument,
   deleteDocument,
   type GeneratedDocumentResponse,
 } from '../services/documents';
 import { getAgentStatus, executeAgents } from '../services/agents';
+import { AdvisorTab } from '../components/AdvisorTab';
 import { AgentStatus } from '../components/AgentStatus';
+import { DocumentList } from '../components/DocumentList';
+import { DocumentViewer } from '../components/DocumentViewer';
+import { DocumentComparison } from '../components/DocumentComparison';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import type { CaseWithDetails, CaseSession } from '../types/case';
 
-type TabId = 'overview' | 'documents' | 'agent-status' | 'generated';
+type TabId = 'overview' | 'documents' | 'agent-status' | 'advisor' | 'generated';
 
 function getBadgeVariant(
   status: string
@@ -83,6 +89,18 @@ export function CaseDetail() {
   const [descValue, setDescValue] = useState('');
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<GeneratedDocumentResponse | null>(null);
+  const [comparingDocuments, setComparingDocuments] = useState<
+    [GeneratedDocumentResponse, GeneratedDocumentResponse] | null
+  >(null);
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    confirmText: string;
+    variant: 'danger' | 'warning' | 'info';
+    onConfirm: () => void;
+  } | null>(null);
 
   const loadCase = useCallback(async () => {
     if (!caseId) return;
@@ -246,9 +264,19 @@ export function CaseDetail() {
   async function handleGeneratePdf(doc: GeneratedDocumentResponse) {
     setGeneratingPdf(doc.id);
     try {
+      setError(null);
       const updated = await generateDocumentPdf(doc.id);
       setGeneratedDocs((prev) =>
         prev.map((d) => (d.id === doc.id ? { ...d, ...updated } : d))
+      );
+      setSelectedDocument((prev) =>
+        prev?.id === doc.id
+          ? {
+              ...prev,
+              ...updated,
+              has_pdf: updated.file_path != null || updated.pdf_generated,
+            }
+          : prev
       );
     } catch {
       setError('Failed to generate PDF');
@@ -259,10 +287,77 @@ export function CaseDetail() {
 
   async function handleDownload(doc: GeneratedDocumentResponse) {
     try {
+      setError(null);
       const filename = `${doc.document_type}_v${doc.version}.pdf`;
       await downloadGeneratedDocument(doc.id, filename);
     } catch {
       setError('Failed to download PDF');
+    }
+  }
+
+  function handleViewDocument(doc: GeneratedDocumentResponse) {
+    setSelectedDocument(doc);
+  }
+
+  function handleCompareVersions(
+    doc1: GeneratedDocumentResponse,
+    doc2: GeneratedDocumentResponse
+  ) {
+    setComparingDocuments([doc1, doc2]);
+    setSelectedDocument(null);
+  }
+
+  function handleRegenerateClick(doc: GeneratedDocumentResponse) {
+    setConfirmState({
+      open: true,
+      title: 'Regenerate document',
+      message: `This will create a new version (v${doc.version + 1}) of "${formatDocType(doc.document_type)}" and generate its PDF. Continue?`,
+      confirmText: 'Regenerate',
+      variant: 'warning',
+      onConfirm: () => {
+        setConfirmState(null);
+        handleRegenerateDocument(doc.id);
+      },
+    });
+  }
+
+  async function handleRegenerateDocument(documentId: string) {
+    if (!caseId) return;
+    try {
+      setError(null);
+      const newDoc = await regenerateDocument(documentId);
+      await loadGeneratedDocs();
+      setSelectedDocument((prev) =>
+        prev?.id === documentId ? newDoc : prev
+      );
+    } catch {
+      setError('Failed to regenerate document');
+    }
+  }
+
+  function handleDeleteGeneratedDocClick(doc: GeneratedDocumentResponse) {
+    setConfirmState({
+      open: true,
+      title: 'Delete document',
+      message: `Delete "${formatDocType(doc.document_type)}" v${doc.version}? This cannot be undone.`,
+      confirmText: 'Delete',
+      variant: 'danger',
+      onConfirm: () => {
+        setConfirmState(null);
+        handleDeleteGeneratedDoc(doc.id);
+      },
+    });
+  }
+
+  async function handleDeleteGeneratedDoc(documentId: string) {
+    if (!caseId) return;
+    try {
+      setError(null);
+      await deleteGeneratedDocument(documentId);
+      await loadGeneratedDocs();
+      if (selectedDocument?.id === documentId) setSelectedDocument(null);
+    } catch {
+      setError('Failed to delete document');
     }
   }
 
@@ -325,6 +420,7 @@ export function CaseDetail() {
     { id: 'overview', label: 'Overview' },
     { id: 'documents', label: 'Documents' },
     { id: 'agent-status', label: 'Agent Status' },
+    { id: 'advisor', label: 'Case Advisor' },
     { id: 'generated', label: 'Generated Documents' },
   ];
 
@@ -554,50 +650,58 @@ export function CaseDetail() {
           />
         )}
 
+        {activeTab === 'advisor' && <AdvisorTab caseId={caseId} />}
+
         {activeTab === 'generated' && (
           <Card title="Generated Documents">
-            {generatedDocs.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                No generated documents. Run the drafting agent first.
-              </p>
-            ) : (
-              <ul className="space-y-4">
-                {generatedDocs.map((doc) => (
-                  <li
-                    key={doc.id}
-                    className="flex flex-wrap items-center justify-between gap-4 rounded border border-gray-200 p-4"
-                  >
-                    <div>
-                      <span className="font-medium">
-                        {formatDocType(doc.document_type)}
-                      </span>
-                      <span className="ml-2 text-sm text-gray-500">
-                        v{doc.version} · {formatDate(doc.generated_at)}
-                      </span>
-                    </div>
-                    <div className="flex gap-2">
-                      {doc.has_pdf ? (
-                        <Button
-                          variant="secondary"
-                          onClick={() => handleDownload(doc)}
-                        >
-                          Download PDF
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="primary"
-                          onClick={() => handleGeneratePdf(doc)}
-                          disabled={generatingPdf === doc.id}
-                        >
-                          {generatingPdf === doc.id ? 'Generating…' : 'Generate PDF'}
-                        </Button>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <DocumentList
+              documents={generatedDocs}
+              onViewDocument={handleViewDocument}
+              onGeneratePdf={handleGeneratePdf}
+              onDownload={handleDownload}
+              onRegenerate={handleRegenerateClick}
+              onDelete={handleDeleteGeneratedDocClick}
+              generatingPdfId={generatingPdf}
+            />
           </Card>
+        )}
+
+        {selectedDocument && (
+          <DocumentViewer
+            documentId={selectedDocument.id}
+            documentType={selectedDocument.document_type}
+            version={selectedDocument.version}
+            generatedAt={selectedDocument.generated_at}
+            hasPdf={selectedDocument.has_pdf ?? false}
+            content={selectedDocument.content ?? ''}
+            caseId={caseId}
+            document={selectedDocument}
+            onRegenerate={() => handleRegenerateClick(selectedDocument)}
+            onDownload={() => handleDownload(selectedDocument)}
+            onClose={() => setSelectedDocument(null)}
+            onSelectVersion={(doc) => setSelectedDocument(doc)}
+            onCompare={handleCompareVersions}
+          />
+        )}
+
+        {comparingDocuments && (
+          <DocumentComparison
+            documents={comparingDocuments}
+            onClose={() => setComparingDocuments(null)}
+          />
+        )}
+
+        {confirmState && (
+          <ConfirmDialog
+            open={confirmState.open}
+            title={confirmState.title}
+            message={confirmState.message}
+            confirmText={confirmState.confirmText}
+            cancelText="Cancel"
+            variant={confirmState.variant}
+            onConfirm={confirmState.onConfirm}
+            onCancel={() => setConfirmState(null)}
+          />
         )}
       </main>
     </div>

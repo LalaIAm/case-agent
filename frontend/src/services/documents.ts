@@ -110,16 +110,53 @@ export async function downloadGeneratedDocument(
   documentId: string,
   filename: string
 ): Promise<void> {
-  const { data } = await api.get<Blob>(
-    `${BASE}/generated/${documentId}/download`,
-    { responseType: 'blob' }
+  const maxRetries = 2;
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const { data } = await api.get<Blob>(
+        `${BASE}/generated/${documentId}/download`,
+        { responseType: 'blob' }
+      );
+      const url = window.URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'document.pdf';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      return;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
+export async function regenerateDocument(
+  documentId: string
+): Promise<GeneratedDocumentResponse> {
+  const { data } = await api.post<GeneratedDocumentResponse>(
+    `${BASE}/generated/${documentId}/regenerate`
   );
-  const url = window.URL.createObjectURL(data);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename || 'document.pdf';
-  document.body.appendChild(a);
-  a.click();
-  window.URL.revokeObjectURL(url);
-  a.remove();
+  return { ...data, has_pdf: data.file_path != null };
+}
+
+export async function deleteGeneratedDocument(
+  documentId: string
+): Promise<void> {
+  await api.delete(`${BASE}/generated/${documentId}`);
+}
+
+/**
+ * Get all versions of a specific document type for a case.
+ */
+export function getDocumentVersions(
+  documents: GeneratedDocumentResponse[],
+  documentType: string
+): GeneratedDocumentResponse[] {
+  return documents
+    .filter((d) => d.document_type === documentType)
+    .sort((a, b) => b.version - a.version);
 }

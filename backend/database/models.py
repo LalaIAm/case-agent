@@ -87,6 +87,9 @@ class Case(Base):
     generated_documents = relationship(
         "GeneratedDocument", back_populates="case", cascade="all, delete-orphan"
     )
+    conversation_messages = relationship(
+        "ConversationMessage", back_populates="case", cascade="all, delete-orphan"
+    )
 
 
 class CaseSession(Base):
@@ -267,6 +270,41 @@ class GeneratedDocument(Base):
     )
 
     case = relationship("Case", back_populates="generated_documents")
+
+
+class ConversationMessage(Base):
+    __tablename__ = "conversation_messages"
+    __table_args__ = (
+        Index(
+            "idx_conversation_messages_case_id_created_at",
+            "case_id",
+            "created_at",
+            postgresql_ops={"created_at": "DESC"},
+        ),
+        {"schema": "public"},
+    )
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    case_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("public.cases.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    role = Column(String(20), nullable=False, index=True)  # 'user' | 'assistant'
+    content = Column(Text, nullable=False)
+    metadata_ = Column(JSON, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    case = relationship("Case", back_populates="conversation_messages")
 
 
 class Rule(Base):

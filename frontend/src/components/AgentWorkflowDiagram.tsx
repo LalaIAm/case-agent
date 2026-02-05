@@ -125,7 +125,6 @@ export function AgentWorkflowDiagram({
                       ? 'border-red-200 bg-red-50'
                       : 'border-gray-200 bg-gray-50'
               }`}
-              role="listitem"
             >
               <div
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm ${
