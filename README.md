@@ -18,9 +18,11 @@ After the Drafting Agent runs, three document types are stored as text in the da
 ## Prerequisites
 
 - **Python 3.11+**
-- **Node 18+**
+- **Node 20.19+** (or **22.12+**)
 - **PostgreSQL 15+**
 - **npm** or **yarn**
+
+Optional: use `.nvmrc` to align your local Node version with the frontend tooling.
 
 ## Setup
 
