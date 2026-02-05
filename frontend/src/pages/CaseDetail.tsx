@@ -13,7 +13,6 @@ import {
   getCaseDetails,
   updateCase,
   deleteCase,
-  getCaseSessions,
   createSession,
 } from '../services/cases';
 import {
