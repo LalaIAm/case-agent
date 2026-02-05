@@ -10,6 +10,7 @@ from backend.database.models import (
     Document,
     GeneratedDocument,
     MemoryBlock,
+    Rule,
     User,
 )
 
@@ -22,6 +23,7 @@ __all__ = [
     "Document",
     "GeneratedDocument",
     "MemoryBlock",
+    "Rule",
     "User",
     "engine",
 ]

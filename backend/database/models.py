@@ -267,3 +267,40 @@ class GeneratedDocument(Base):
     )
 
     case = relationship("Case", back_populates="generated_documents")
+
+
+class Rule(Base):
+    __tablename__ = "rules"
+    __table_args__ = (
+        Index(
+            "ix_rules_embedding",
+            "embedding",
+            postgresql_using="ivfflat",
+            postgresql_with={"lists": 100},
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+        Index("ix_rules_rule_type_source", "rule_type", "source"),
+        {"schema": "public"},
+    )
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    rule_type = Column(String(100), nullable=False, index=True)
+    source = Column(String(500), nullable=False)
+    title = Column(String(1000), nullable=False)
+    content = Column(Text, nullable=False)
+    embedding = Column(Vector(1536), nullable=True)
+    metadata_ = Column(JSON, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        onupdate=func.now(),
+        nullable=True,
+    )

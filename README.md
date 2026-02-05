@@ -6,7 +6,7 @@ A multi-agent legal assistant web application with persistent memory to help Min
 
 The application uses a Python FastAPI backend with React frontend, OpenAI agents, PostgreSQL with embeddings for memory, and a hybrid rules system combining static Minnesota court rules with RAG for case law.
 
-- **Backend**: FastAPI, SQLAlchemy, Alembic, OpenAI, Tavily Search
+- **Backend**: FastAPI, SQLAlchemy, Alembic, OpenAI, Tavily Search (legal research, case law, precedents, statutes)
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS
 - **Database**: PostgreSQL 15+ with pgvector for embeddings
 - **Agents**: Intake, Research, Document Analysis, Strategy, Drafting (orchestrated workflow)
@@ -41,7 +41,7 @@ Edit `.env` with your values. Key variables:
 |------------------|-------------------------------------|----------------------------------|
 | DATABASE_URL     | PostgreSQL connection string        | postgresql://user:pass@localhost:5432/case_agent |
 | OPENAI_API_KEY   | OpenAI API key for agents           | sk-...                           |
-| TAVILY_API_KEY   | Tavily Search API key               | tvly-...                         |
+| TAVILY_API_KEY   | Tavily Search API key (required for research/tools) | tvly-...                         |
 | SECRET_KEY       | JWT secret (min 32 chars)           | your-secret-key-32-chars-min     |
 | FRONTEND_URL     | Frontend origin(s) for CORS         | http://localhost:5173            |
 | ENVIRONMENT      | development / staging / production  | development                      |

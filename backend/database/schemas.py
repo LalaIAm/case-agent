@@ -184,6 +184,28 @@ class AgentRunUpdate(BaseModel):
     error_message: Optional[str] = None
 
 
+class AgentExecuteRequest(BaseModel):
+    case_id: UUID
+    agent_name: Optional[Literal["intake", "research", "document", "strategy", "drafting"]] = None
+    force_restart: bool = False
+
+
+class AgentStatusResponse(BaseModel):
+    case_id: UUID
+    current_agent: Optional[str] = None
+    workflow_status: str
+    progress_percentage: int
+    agent_runs: List[AgentRunRead] = []
+
+
+class WorkflowStateResponse(BaseModel):
+    case_id: UUID
+    completed_agents: List[str] = []
+    pending_agents: List[str] = []
+    current_agent: Optional[str] = None
+    overall_status: str
+
+
 # --- GeneratedDocument Schemas ---
 class GeneratedDocumentBase(BaseModel):
     document_type: Literal["statement_of_claim", "hearing_script", "advice"]
@@ -207,3 +229,104 @@ class GeneratedDocumentRead(GeneratedDocumentBase):
 class CaseWithRelations(CaseRead):
     sessions: List[CaseSessionRead] = []
     documents: List[DocumentRead] = []
+
+
+# --- Rule Schemas ---
+RULE_TYPES = ("statute", "procedure", "case_law", "interpretation")
+
+
+class RuleBase(BaseModel):
+    rule_type: str
+    source: str
+    title: str
+    content: str
+    metadata_: Optional[Dict[str, Any]] = None
+
+
+class RuleCreate(RuleBase):
+    rule_type: Literal["statute", "procedure", "case_law", "interpretation"]
+
+    @field_validator("rule_type")
+    @classmethod
+    def rule_type_valid(cls, v: str) -> str:
+        if v not in RULE_TYPES:
+            raise ValueError(f"rule_type must be one of {RULE_TYPES}")
+        return v
+
+
+class RuleRead(RuleBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+class RuleUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    metadata_: Optional[Dict[str, Any]] = None
+
+
+def _default_rules_limit() -> int:
+    from backend.config import get_settings
+    return get_settings().RULES_MAX_RESULTS
+
+
+class RuleSearch(BaseModel):
+    query: str
+    rule_types: Optional[List[str]] = None
+    limit: int = Field(default_factory=_default_rules_limit)
+    min_similarity: Optional[float] = None
+
+
+class HybridRuleSearch(RuleSearch):
+    include_static: bool = True
+    include_case_law: bool = True
+
+
+# --- Tavily Search Schemas ---
+
+
+class TavilySearchRequest(BaseModel):
+    """Request body for general Tavily search."""
+
+    query: str
+    search_depth: str = "basic"
+    max_results: int = Field(default=5, ge=1, le=20)
+    include_domains: Optional[List[str]] = None
+    exclude_domains: Optional[List[str]] = None
+    topic: str = "general"
+
+
+class TavilySearchResponse(BaseModel):
+    """Response for Tavily search endpoints."""
+
+    query: str
+    results: List[Dict[str, Any]]
+    answer: Optional[str] = None
+    search_time: Optional[float] = None
+
+
+class CaseLawSearchRequest(BaseModel):
+    """Request body for case law search."""
+
+    query: str
+    jurisdiction: str = "Minnesota"
+    max_results: int = Field(default=5, ge=1, le=20)
+
+
+class PrecedentSearchRequest(BaseModel):
+    """Request body for precedent research."""
+
+    dispute_type: str
+    facts: str
+    jurisdiction: str = "Minnesota"
+    max_results: int = Field(default=5, ge=1, le=20)
+
+
+class StatuteSearchRequest(BaseModel):
+    """Request body for statute lookup."""
+
+    topic: str
+    statute_reference: Optional[str] = None
+    max_results: int = Field(default=3, ge=1, le=20)
