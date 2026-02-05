@@ -18,6 +18,7 @@ from backend.agents.agent_utils import (
     validate_memory_block_metadata,
 )
 from backend.agents.base_agent import BaseAgent
+from backend.agents.state import WorkflowStateManager
 from backend.agents.prompts import (
     DOCUMENT_ANALYSIS_SYSTEM_PROMPT,
     DRAFTING_SYSTEM_PROMPT,
@@ -41,7 +42,9 @@ from backend.agents.tool_schemas import (
 )
 from backend.config import get_settings
 from backend.database.models import Case, Document, GeneratedDocument
+from backend.memory.embeddings import EmbeddingService
 from backend.memory.utils import format_memory_context, get_or_create_session
+from backend.rules.rule_retriever import RuleRetriever
 from backend.tools.tavily_search import (
     TavilySearchService,
     format_search_results_for_agent,
@@ -210,7 +213,6 @@ class ResearchAgent(BaseAgent):
         )
         facts_summary = build_facts_summary(fact_blocks)
 
-        from backend.agents.state import WorkflowStateManager
         state_mgr = WorkflowStateManager(self._db, self._case_id)
         intake_result = await state_mgr.get_agent_result("intake")
         dispute_type = "other"
@@ -218,7 +220,6 @@ class ResearchAgent(BaseAgent):
             dispute_type = intake_result["dispute_type"]
 
         # Rule retriever and Tavily
-        from backend.rules.rule_retriever import RuleRetriever
         rule_retriever = RuleRetriever(self._db)
         tavily_service = TavilySearchService()
 
@@ -405,7 +406,6 @@ class DocumentAgent(BaseAgent):
         evidence_items_extracted = 0
         high_relevance_count = 0
 
-        from backend.memory.embeddings import EmbeddingService
         embedding_service = EmbeddingService()
 
         for doc in documents:
@@ -566,7 +566,6 @@ class StrategyAgent(BaseAgent):
         evidence_summary = truncate_text_for_context(build_evidence_summary(evidence_blocks), max_chars=max_chars)
         rules_summary = truncate_text_for_context(build_rules_summary(rule_blocks), max_chars=max_chars)
 
-        from backend.agents.state import WorkflowStateManager
         state_mgr = WorkflowStateManager(self._db, self._case_id)
         intake_result = await state_mgr.get_agent_result("intake")
         dispute_type = "other"
@@ -747,7 +746,6 @@ class DraftingAgent(BaseAgent):
             raise ValueError("Case not found")
         case_title = (case.title or "").strip() or "Untitled Case"
 
-        from backend.agents.state import WorkflowStateManager
         state_mgr = WorkflowStateManager(self._db, self._case_id)
         intake_result = await state_mgr.get_agent_result("intake")
         dispute_type = "other"
