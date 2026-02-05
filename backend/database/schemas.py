@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, field_validator
 
 
 # --- User Schemas ---
@@ -138,6 +138,8 @@ class DocumentBase(BaseModel):
 class DocumentCreate(DocumentBase):
     case_id: UUID
     file_size: int
+    file_path: Optional[str] = None
+    extracted_text: Optional[str] = None
 
 
 class DocumentRead(DocumentBase):
@@ -223,6 +225,36 @@ class GeneratedDocumentRead(GeneratedDocumentBase):
     file_path: Optional[str] = None
     version: int
     generated_at: datetime
+
+
+class GeneratedDocumentWithPDF(GeneratedDocumentRead):
+    """Generated document with computed has_pdf and download_url for frontend."""
+
+    @computed_field
+    @property
+    def has_pdf(self) -> bool:
+        return self.file_path is not None
+
+    @computed_field
+    @property
+    def download_url(self) -> Optional[str]:
+        if not self.file_path:
+            return None
+        return f"/api/documents/generated/{self.id}/download"
+
+
+class DocumentGenerationRequest(BaseModel):
+    """Request body for triggering PDF generation."""
+
+    document_id: UUID
+    force_regenerate: bool = False
+
+
+class DocumentGenerationResponse(GeneratedDocumentRead):
+    """Response after PDF generation with generation metadata."""
+
+    pdf_generated: bool = True
+    generation_time_ms: Optional[int] = None
 
 
 # --- CaseWithRelations (for detailed views) ---

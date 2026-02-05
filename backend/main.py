@@ -2,6 +2,7 @@
 FastAPI application entry point for Minnesota Conciliation Court Case Agent.
 """
 import asyncio
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
@@ -28,8 +29,11 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    """Verify database connection on application startup."""
+    """Verify database connection and create upload/generated doc directories on application startup."""
     await check_db_connection()
+    settings = get_settings()
+    Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+    Path(settings.GENERATED_DOCS_DIR).mkdir(parents=True, exist_ok=True)
 
 
 @app.get("/health")
@@ -97,12 +101,16 @@ async def agent_status_websocket(
 
 from backend.agents.router import router as agents_router
 from backend.auth.router import router as auth_router
+from backend.documents.router import router as documents_router
+from backend.memory.cases_router import router as cases_router
 from backend.memory.router import router as memory_router
 from backend.rules.router import router as rules_router
 from backend.tools.router import router as tools_router
 
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
+app.include_router(cases_router, prefix="/api/cases", tags=["cases"])
 app.include_router(memory_router, prefix="/api/memory", tags=["memory"])
 app.include_router(rules_router, prefix="/api/rules", tags=["rules"])
 app.include_router(tools_router, prefix="/api/tools", tags=["tools"])
+app.include_router(documents_router, prefix="/api/documents", tags=["documents"])
 app.include_router(agents_router, prefix="/api", tags=["agents"])

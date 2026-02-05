@@ -2,9 +2,9 @@
 Application settings management using Pydantic BaseSettings.
 """
 from functools import lru_cache
-from typing import Optional
+from typing import List, Optional
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +14,29 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     DATABASE_URL: str = Field(..., description="PostgreSQL connection string")
+    UPLOAD_DIR: str = Field(default="./uploads", description="File storage location for document uploads")
+    GENERATED_DOCS_DIR: str = Field(
+        default="./uploads/generated",
+        description="Storage for generated court documents",
+    )
+    PDF_PAGE_SIZE: str = Field(default="LETTER", description="PDF page size: LETTER or A4")
+    PDF_FONT_NAME: str = Field(default="Times-Roman", description="Default font for court documents")
+    PDF_FONT_SIZE: int = Field(default=12, ge=8, le=16, description="Default font size in points")
+    MAX_UPLOAD_SIZE_MB: int = Field(default=10, ge=1, le=500, description="Maximum upload file size in MB")
+    ALLOWED_FILE_TYPES: List[str] = Field(
+        default=["pdf", "png", "jpg", "jpeg"],
+        description="Allowed file extensions for document uploads",
+    )
+
+    @field_validator("ALLOWED_FILE_TYPES", mode="before")
+    @classmethod
+    def parse_allowed_file_types(cls, v: object) -> List[str]:
+        if isinstance(v, list):
+            return [str(x).strip().lower() for x in v if x]
+        if isinstance(v, str):
+            return [x.strip().lower() for x in v.split(",") if x.strip()]
+        return ["pdf", "png", "jpg", "jpeg"]
+
     OPENAI_API_KEY: str = Field(..., description="OpenAI API key for agents and embeddings")
     TAVILY_API_KEY: str = Field(..., description="Tavily Search API key for research agent")
     SECRET_KEY: str = Field(..., min_length=32, description="Secret key for JWT signing")

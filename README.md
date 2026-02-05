@@ -11,6 +11,10 @@ The application uses a Python FastAPI backend with React frontend, OpenAI agents
 - **Database**: PostgreSQL 15+ with pgvector for embeddings
 - **Agents**: Intake, Research, Document Analysis, Strategy, Drafting (orchestrated workflow)
 
+### Generated Court Documents
+
+After the Drafting Agent runs, three document types are stored as text in the database: **Statement of Claim**, **Hearing Script**, and **Legal Advice**. You can generate PDFs on demand and download them via the documents API. The workflow is: agent drafting → store text in `GeneratedDocument` → call generate-pdf → download PDF. This keeps generation separate from the agent pipeline and supports regeneration and versioning without re-running the full workflow.
+
 ## Prerequisites
 
 - **Python 3.11+**
@@ -127,11 +131,61 @@ case-agent/
 | Database | PostgreSQL 15+                                            |
 | Tools    | axios, socket.io-client, react-dropzone                    |
 
+## Generated Court Documents workflow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant API
+    participant DraftingAgent
+    participant GeneratedDocument
+    participant PDFGenerator
+    participant FileSystem
+
+    User->>API: POST /api/agents/execute (drafting)
+    API->>DraftingAgent: Execute drafting agent
+    DraftingAgent->>GeneratedDocument: Store text content (3 docs)
+    DraftingAgent-->>API: Return document IDs
+    API-->>User: Agent complete
+
+    User->>API: POST /generated/{id}/generate-pdf
+    API->>GeneratedDocument: Fetch document by ID
+    GeneratedDocument-->>API: Return content + metadata
+    API->>PDFGenerator: Generate PDF (statement_of_claim)
+    PDFGenerator->>FileSystem: Write PDF file
+    FileSystem-->>PDFGenerator: File path
+    PDFGenerator-->>API: PDF path
+    API->>GeneratedDocument: Update file_path
+    API-->>User: Return document with PDF URL
+
+    User->>API: GET /generated/{id}/download
+    API->>GeneratedDocument: Verify ownership + file_path
+    API->>FileSystem: Read PDF file
+    FileSystem-->>API: PDF bytes
+    API-->>User: Download PDF
+```
+
+### Example API calls for document generation
+
+- Generate PDF for a generated document (after drafting):  
+  `POST /api/documents/generated/{document_id}/generate-pdf`  
+  Returns the document with `file_path` and `generation_time_ms`.
+
+- Download the PDF:  
+  `GET /api/documents/generated/{document_id}/download`  
+  Returns the file as an attachment.
+
+- List generated documents for a case:  
+  `GET /api/documents/cases/{case_id}/generated`  
+  Returns list with `has_pdf` and `download_url` for each.
+
+All require authentication; the user must own the case.
+
 ## Development notes
 
 - Backend API is prefixed at `/api` when proxied from Vite (see `frontend/vite.config.ts`).
 - Health check: `GET /health` returns `{"status": "healthy"}`.
-- Authentication and case routes are planned for Phase 2+.
+- Authentication and case routes are in use; use `current_active_user` for protected routes.
 
 ## License
 

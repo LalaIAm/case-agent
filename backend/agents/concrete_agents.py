@@ -603,6 +603,32 @@ class StrategyAgent(BaseAgent):
             await self._update_agent_run(agent_run_id, error_message=str(e))
             raise
 
+        # Validate strategy response schema: required keys and non-empty content per item
+        if not isinstance(data, dict):
+            err = "Strategy response must be a JSON object"
+            await self._update_agent_run(agent_run_id, error_message=err)
+            raise ValueError(err)
+        for key in ("legal_arguments", "negotiation_points", "procedural_steps"):
+            if key not in data:
+                err = f"Strategy response missing required key: {key}"
+                await self._update_agent_run(agent_run_id, error_message=err)
+                raise ValueError(err)
+            items = data[key]
+            if not isinstance(items, list):
+                err = f"Strategy response key '{key}' must be a list"
+                await self._update_agent_run(agent_run_id, error_message=err)
+                raise ValueError(err)
+            for i, item in enumerate(items):
+                if not isinstance(item, dict):
+                    err = f"Strategy response '{key}[{i}]' must be an object"
+                    await self._update_agent_run(agent_run_id, error_message=err)
+                    raise ValueError(err)
+                content = (item.get("content") or "").strip()
+                if not content:
+                    err = f"Strategy response '{key}[{i}]' has empty content"
+                    await self._update_agent_run(agent_run_id, error_message=err)
+                    raise ValueError(err)
+
         legal_arguments_created = 0
         negotiation_points_created = 0
         procedural_steps_created = 0
@@ -763,6 +789,27 @@ class DraftingAgent(BaseAgent):
         except (ValueError, TypeError) as e:
             await self._update_agent_run(agent_run_id, error_message=str(e))
             raise
+
+        # Validate drafting response schema: statement_of_claim, hearing_script, legal_advice must have non-empty full_text
+        if not isinstance(data, dict):
+            err = "Drafting response must be a JSON object"
+            await self._update_agent_run(agent_run_id, error_message=err)
+            raise ValueError(err)
+        for doc_key, doc_label in (
+            ("statement_of_claim", "statement_of_claim"),
+            ("hearing_script", "hearing_script"),
+            ("legal_advice", "legal_advice"),
+        ):
+            obj = data.get(doc_key)
+            if not isinstance(obj, dict):
+                err = f"Drafting response missing or invalid '{doc_label}': must be an object"
+                await self._update_agent_run(agent_run_id, error_message=err)
+                raise ValueError(err)
+            full_text = (obj.get("full_text") or "").strip()
+            if not full_text:
+                err = f"Drafting response '{doc_label}' has empty or missing full_text"
+                await self._update_agent_run(agent_run_id, error_message=err)
+                raise ValueError(err)
 
         doc_ids: Dict[str, Any] = {}
         claim_amount = None
