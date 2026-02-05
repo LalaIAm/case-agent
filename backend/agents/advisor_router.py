@@ -39,7 +39,10 @@ async def _sse_stream(
     message: str,
     include_context: bool,
 ):
-    """Generator yielding SSE events for streaming response."""
+    """Generator yielding SSE events for streaming response.
+    Persistence (commit) is done inside ConversationalAdvisor.generate_response_stream
+    using the same session passed here.
+    """
     from backend.database import AsyncSessionLocal
 
     async with AsyncSessionLocal() as db:
@@ -49,7 +52,6 @@ async def _sse_stream(
                 user_message=message, include_context=include_context
             ):
                 yield {"data": chunk}
-            await db.commit()
         except Exception as e:
             await db.rollback()
             yield {"data": f"[Error: {e!s}]"}

@@ -139,6 +139,7 @@ class ConversationalAdvisor:
         )
         self._db.add(assistant_msg)
         await self._db.flush()
+        await self._db.commit()
 
     async def trigger_reanalysis(
         self, agent_name: Optional[str] = None
