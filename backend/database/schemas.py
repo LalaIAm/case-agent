@@ -208,7 +208,7 @@ class WorkflowStateResponse(BaseModel):
 
 # --- GeneratedDocument Schemas ---
 class GeneratedDocumentBase(BaseModel):
-    document_type: Literal["statement_of_claim", "hearing_script", "advice"]
+    document_type: Literal["statement_of_claim", "hearing_script", "legal_advice"]
     content: str
 
 

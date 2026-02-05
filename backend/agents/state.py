@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database.models import AgentRun
@@ -40,6 +40,10 @@ class WorkflowStateManager:
     def __init__(self, db: AsyncSession, case_id: UUID) -> None:
         self._db = db
         self._case_id = case_id
+
+    async def clear_runs_for_restart(self) -> None:
+        """Delete all AgentRun records for this case. Use when force_restart=True so get_state() reflects the new run."""
+        await self._db.execute(delete(AgentRun).where(AgentRun.case_id == self._case_id))
 
     async def get_state(self) -> WorkflowState:
         """Retrieve current workflow state from AgentRun records."""

@@ -800,7 +800,7 @@ class DraftingAgent(BaseAgent):
             full_text = (advice.get("full_text") or "").strip()
             gd = GeneratedDocument(
                 case_id=self._case_id,
-                document_type="advice",
+                document_type="legal_advice",
                 content=full_text,
                 version=1,
             )
